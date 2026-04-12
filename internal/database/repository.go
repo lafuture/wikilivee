@@ -66,11 +66,10 @@ func (p *Postgres) DeletePage(ctx context.Context, id string) error {
 func (p *Postgres) GetPageBacklinks(ctx context.Context, id string) ([]models.PageSummary, error) {
 	const q = `
 		SELECT id, title, updated_at FROM pages
-		WHERE content @> jsonb_build_array(
-			jsonb_build_object(
-				'type', 'page_link',
-				'props', jsonb_build_object('targetId', $1)
-			)
+		WHERE EXISTS (
+			SELECT 1 FROM jsonb_array_elements(content) AS block
+			WHERE block->>'type' = 'page_link'
+			AND block->'props'->>'targetId' = $1
 		)
 		ORDER BY updated_at DESC`
 

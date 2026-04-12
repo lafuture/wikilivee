@@ -23,6 +23,10 @@ func NewHandler(hub *Hub) http.HandlerFunc {
 			return
 		}
 
+		r.Proto = "HTTP/1.1"
+		r.ProtoMajor = 1
+		r.ProtoMinor = 1
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			return
