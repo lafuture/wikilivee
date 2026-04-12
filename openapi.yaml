@@ -1,0 +1,307 @@
+openapi: 3.0.3
+info:
+  title: MWS Wiki API
+  version: 1.1.0
+  description: API для Wiki Editor (pages + tables + backlinks + collaboration)
+
+servers:
+  - url: http://localhost:8080
+
+paths:
+
+  /api/pages:
+    get:
+      summary: Список всех страниц
+      responses:
+        '200':
+          description: Список страниц
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PageSummary'
+    post:
+      summary: Создать страницу
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePageRequest'
+      responses:
+        '201':
+          description: Страница создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+
+  /api/pages/{id}:
+    get:
+      summary: Получить страницу
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Страница
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '404':
+          description: Страница не найдена
+
+    put:
+      summary: Сохранить страницу (autosave)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePageRequest'
+      responses:
+        '200':
+          description: Обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdatePageResponse'
+        '404':
+          description: Страница не найдена
+
+    delete:
+      summary: Удалить страницу
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Удалено
+        '404':
+          description: Страница не найдена
+
+  /api/pages/{id}/backlinks:
+    get:
+      summary: Получить страницы, которые ссылаются на данную
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список обратных ссылок
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PageSummary'
+
+  /api/tables:
+    get:
+      summary: Получить список таблиц из MWS Tables
+      responses:
+        '200':
+          description: Список таблиц
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TableSummary'
+        '502':
+          description: MWS Tables API недоступен
+
+  /api/tables/{id}:
+    get:
+      summary: Получить таблицу из MWS Tables
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Таблица
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '502':
+          description: MWS Tables API недоступен
+
+  /ws/pages/{id}:
+    get:
+      summary: WebSocket для совместного редактирования страницы
+      description: >
+        Upgrade до WebSocket. После подключения клиент получает и отправляет
+        сообщения типа `PageEvent`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '101':
+          description: Switching Protocols — соединение установлено
+
+components:
+  schemas:
+
+    PageSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    Page:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Block'
+        version:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreatePageRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+
+    UpdatePageRequest:
+      type: object
+      required:
+        - title
+        - content
+        - version
+      properties:
+        title:
+          type: string
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Block'
+        version:
+          type: integer
+
+    UpdatePageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        version:
+          type: integer
+
+    Block:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - paragraph
+            - heading
+            - list
+            - table_embed
+            - page_link
+        content:
+          type: string
+          nullable: true
+        props:
+          type: object
+          additionalProperties: true
+
+    PageEvent:
+      type: object
+      description: Сообщение WebSocket для collaboration
+      properties:
+        type:
+          type: string
+          enum:
+            - update
+            - join
+            - leave
+        pageId:
+          type: string
+        userId:
+          type: string
+        payload:
+          $ref: '#/components/schemas/UpdatePageRequest'
+
+    TableSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+
+    Table:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableColumn'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableRow'
+
+    TableColumn:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+
+    TableRow:
+      type: object
+      properties:
+        id:
+          type: string
+        values:
+          type: object
+          additionalProperties: true

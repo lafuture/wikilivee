@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -i '' 's|\"paired/|\"wikilivee/|g' /Users/zakharbakhmutov/Desktop/WikiLivee/cmd/main.go /Users/zakharbakhmutov/Desktop/WikiLivee/internal/server/init.go /Users/zakharbakhmutov/Desktop/WikiLivee/internal/server/router.go /Users/zakharbakhmutov/Desktop/WikiLivee/internal/handlers/page_handler.go /Users/zakharbakhmutov/Desktop/WikiLivee/internal/handlers/table_handler.go /Users/zakharbakhmutov/Desktop/WikiLivee/internal/handlers/init.go)",
+      "Bash(sed -i '' 's|^module paired$|module wikilivee|' /Users/zakharbakhmutov/Desktop/WikiLivee/go.mod)",
+      "Bash(xargs ls:*)",
+      "Bash(go build:*)",
+      "Bash(go get:*)"
+    ]
+  }
+}

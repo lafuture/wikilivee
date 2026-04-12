@@ -1,0 +1,7 @@
+.git
+.idea
+.env
+.env.*
+*.md
+postgres-data
+**/terminals

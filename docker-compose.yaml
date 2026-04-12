@@ -1,0 +1,44 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wikilivee
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - ./outernal:/app/outernal:ro
+    environment:
+      LISTEN_ADDR: "${LISTEN_ADDR:-:8080}"
+      STATIC_DIR: "${STATIC_DIR:-/app/outernal}"
+      JWT_SECRET: "${JWT_SECRET:-super-secret-key-change-me}"
+      DB_URL: "${DB_URL:-postgresql://user:qwerty@db:5432/mydb?sslmode=disable}"
+      MIGRA_URL: "${MIGRA_URL:-file:///app/internal/database/migrations}"
+
+  db:
+    image: postgres:16.10-alpine
+    container_name: wikilivee-db
+    restart: always
+    ports:
+      - "${DB_PORT_EXTERNAL:-5430}:5432"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-user}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-qwerty}"
+      POSTGRES_DB: "${POSTGRES_DB:-mydb}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+
+volumes:
+  postgres-data:
