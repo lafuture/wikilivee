@@ -15,6 +15,7 @@ const (
 
 type Client struct {
 	pageID string
+	userID string
 	hub    *Hub
 	conn   *websocket.Conn
 	send   chan []byte

@@ -5,12 +5,14 @@ info:
   description: >
     Полноценный Wiki Editor внутри MWS Tables.
     Страницы, таблицы, backlinks, collaboration, versioning, comments, search, graph, AI.
+  license:
+    name: MIT
 
 servers:
-  - url: http://localhost:8080
-    description: Локальная разработка
   - url: https://balooai.ru
     description: Production
+  - url: http://localhost:8080
+    description: Локальная разработка
 
 security:
   - bearerAuth: []
@@ -23,6 +25,7 @@ paths:
 
   /api/pages:
     get:
+      operationId: listPages
       tags: [Pages]
       summary: Список всех страниц
       security: []
@@ -42,8 +45,11 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PageSummary'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
     post:
+      operationId: createPage
       tags: [Pages]
       summary: Создать страницу
       security: []
@@ -60,9 +66,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/pages/{id}:
     get:
+      operationId: getPage
       tags: [Pages]
       summary: Получить страницу
       security: []
@@ -79,6 +90,7 @@ paths:
           $ref: '#/components/responses/NotFound'
 
     put:
+      operationId: savePage
       tags: [Pages]
       summary: Сохранить страницу (autosave)
       security: []
@@ -97,10 +109,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UpdatePageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
 
     delete:
+      operationId: deletePage
       tags: [Pages]
       summary: Удалить страницу
       security: []
@@ -114,6 +129,7 @@ paths:
 
   /api/pages/{id}/backlinks:
     get:
+      operationId: getPageBacklinks
       tags: [Pages]
       summary: Страницы которые ссылаются на данную
       security: []
@@ -128,9 +144,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PageSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/pages/{id}/children:
     get:
+      operationId: getPageChildren
       tags: [Pages]
       summary: Дочерние страницы
       security: []
@@ -145,6 +164,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PageSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   # ════════════════════════════════════════════════════════
   # VERSIONING
@@ -152,6 +173,7 @@ paths:
 
   /api/pages/{id}/versions:
     get:
+      operationId: getPageVersions
       tags: [Versioning]
       summary: История версий страницы
       security: []
@@ -171,6 +193,7 @@ paths:
 
   /api/pages/{id}/versions/{version}:
     get:
+      operationId: getPageVersion
       tags: [Versioning]
       summary: Получить конкретную версию
       security: []
@@ -189,6 +212,7 @@ paths:
 
   /api/pages/{id}/versions/{version}/restore:
     post:
+      operationId: restorePageVersion
       tags: [Versioning]
       summary: Откатить страницу к версии
       security: []
@@ -211,6 +235,7 @@ paths:
 
   /api/pages/{id}/comments:
     get:
+      operationId: getComments
       tags: [Comments]
       summary: Комментарии к странице
       security: []
@@ -225,8 +250,11 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Comment'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
     post:
+      operationId: addComment
       tags: [Comments]
       summary: Добавить комментарий
       security: []
@@ -245,22 +273,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Comment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
-  /api/pages/{id}/comments/{commentId}:
     delete:
+      operationId: deleteComment
       tags: [Comments]
       summary: Удалить комментарий
       security: []
       parameters:
         - $ref: '#/components/parameters/pageId'
         - name: commentId
-          in: path
+          in: query
           required: true
           schema:
             type: string
+          description: ID комментария для удаления
       responses:
         '204':
           description: Удалено
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -268,24 +303,26 @@ paths:
   # SEARCH
   # ════════════════════════════════════════════════════════
 
-  /api/search:
-    get:
+  /api/pages/search:
+    post:
+      operationId: searchPages
       tags: [Search]
       summary: Полнотекстовый поиск по страницам
       security: []
-      parameters:
-        - name: q
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Поисковый запрос
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 20
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [q]
+              properties:
+                q:
+                  type: string
+                  description: Поисковый запрос
+                limit:
+                  type: integer
+                  default: 20
       responses:
         '200':
           description: Результаты поиска
@@ -295,13 +332,16 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SearchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   # ════════════════════════════════════════════════════════
   # GRAPH
   # ════════════════════════════════════════════════════════
 
-  /api/graph:
+  /api/pages/graph:
     get:
+      operationId: getPagesGraph
       tags: [Graph]
       summary: Граф связей между страницами
       security: []
@@ -312,6 +352,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Graph'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   # ════════════════════════════════════════════════════════
   # TABLES (proxy → MWS)
@@ -319,6 +361,7 @@ paths:
 
   /api/tables:
     get:
+      operationId: listTables
       tags: [Tables]
       summary: Список таблиц из MWS Tables
       security: []
@@ -336,6 +379,7 @@ paths:
 
   /api/tables/{id}:
     get:
+      operationId: getTable
       tags: [Tables]
       summary: Получить таблицу из MWS Tables
       security: []
@@ -361,6 +405,7 @@ paths:
 
   /api/ai/complete:
     post:
+      operationId: aiComplete
       tags: [AI]
       summary: Генерация текста
       security: []
@@ -377,11 +422,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AIResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '502':
           $ref: '#/components/responses/BadGateway'
 
   /api/ai/summarize:
     post:
+      operationId: aiSummarize
       tags: [AI]
       summary: Суммаризация страницы
       security: []
@@ -402,11 +450,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AIResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '502':
           $ref: '#/components/responses/BadGateway'
 
   /api/ai/suggest:
     post:
+      operationId: aiSuggest
       tags: [AI]
       summary: Предложить следующий блок
       security: []
@@ -428,6 +479,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AIResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '502':
           $ref: '#/components/responses/BadGateway'
 
@@ -437,20 +490,59 @@ paths:
 
   /ws/pages/{id}:
     get:
+      operationId: connectPageWs
       tags: [Collaboration]
       summary: WebSocket для совместного редактирования
       security: []
       description: >
-        Upgrade до WebSocket. После подключения клиент получает и отправляет
-        сообщения типа `PageEvent`. При получении `update` — изменения
-        сохраняются в БД и рассылаются всем участникам комнаты.
+        Upgrade до WebSocket. После подключения сервер немедленно рассылает
+        всем в комнате сообщение `presence` с обновлённым списком участников.
+
+
+        **Входящие сообщения (клиент → сервер)** — схема `WsUpdateEvent` или `WsCursorEvent`:
+
+        - `update` — сохраняет страницу в БД и рассылает всем остальным
+
+        - `cursor` — передаёт позицию курсора остальным участникам (не сохраняется)
+
+
+        **Исходящие сообщения (сервер → клиент)** — схема `WsUpdateEvent`, `WsCursorEvent` или `WsPresenceEvent`:
+
+        - `update` — изменения страницы от другого участника
+
+        - `cursor` — позиция курсора другого участника
+
+        - `presence` — актуальный список участников в комнате (отправляется при join/leave)
       parameters:
         - $ref: '#/components/parameters/pageId'
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ID пользователя. Если не указан — генерируется случайный anon-XXXXX
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Имя пользователя для отображения. По умолчанию "Anonymous"
+        - name: color
+          in: query
+          required: false
+          schema:
+            type: string
+            example: '#3b82f6'
+          description: HEX цвет курсора. Если не указан — выбирается случайный из палитры
       responses:
         '101':
           description: Switching Protocols — соединение установлено
         '400':
           description: Не WebSocket запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
 
@@ -477,8 +569,20 @@ components:
       description: Номер версии
 
   responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     NotFound:
       description: Не найдено
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Внутренняя ошибка сервера
       content:
         application/json:
           schema:
@@ -508,9 +612,13 @@ components:
           type: string
         title:
           type: string
+        icon:
+          type: string
         parentId:
           type: string
           nullable: true
+        version:
+          type: integer
         updatedAt:
           type: string
           format: date-time
@@ -521,6 +629,8 @@ components:
         id:
           type: string
         title:
+          type: string
+        icon:
           type: string
         parentId:
           type: string
@@ -540,6 +650,8 @@ components:
       required: [title]
       properties:
         title:
+          type: string
+        icon:
           type: string
         parentId:
           type: string
@@ -629,6 +741,12 @@ components:
           type: string
         pageId:
           type: string
+        anchorBlockId:
+          type: string
+          description: ID блока к которому прикреплён комментарий
+        anchorText:
+          type: string
+          description: Снапшот выделенного текста на момент создания комментария
         author:
           type: string
         text:
@@ -639,8 +757,14 @@ components:
 
     CreateCommentRequest:
       type: object
-      required: [author, text]
+      required: [anchorBlockId, text]
       properties:
+        anchorBlockId:
+          type: string
+          description: ID блока к которому прикрепляется комментарий
+        anchorText:
+          type: string
+          description: Выделенный текст (снапшот)
         author:
           type: string
         text:
@@ -696,16 +820,76 @@ components:
 
     # ── WebSocket ────────────────────────────────────────
 
-    PageEvent:
+    WsUpdateEvent:
       type: object
+      description: Изменение содержимого страницы (клиент↔сервер)
+      required: [type, userId, payload]
       properties:
         type:
           type: string
-          enum: [update, join, leave]
+          enum: [update]
         userId:
           type: string
         payload:
           $ref: '#/components/schemas/UpdatePageRequest'
+
+    WsCursorEvent:
+      type: object
+      description: Позиция курсора участника (клиент↔сервер, не сохраняется в БД)
+      required: [type, userId, cursor]
+      properties:
+        type:
+          type: string
+          enum: [cursor]
+        userId:
+          type: string
+        cursor:
+          $ref: '#/components/schemas/CursorPayload'
+
+    WsPresenceEvent:
+      type: object
+      description: Список участников в комнате (только сервер→клиент, при join/leave)
+      required: [type, users]
+      properties:
+        type:
+          type: string
+          enum: [presence]
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresenceUser'
+
+    CursorPayload:
+      type: object
+      description: Координаты курсора в долях от размера окна (0..1)
+      required: [x, y]
+      properties:
+        x:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Горизонтальная позиция (0 = левый край, 1 = правый)
+        y:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Вертикальная позиция (0 = верх, 1 = низ)
+
+    PresenceUser:
+      type: object
+      description: Участник совместного редактирования
+      required: [userId, name, color]
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          example: '#3b82f6'
+          description: HEX цвет для отображения курсора и аватарки
 
     # ── AI ───────────────────────────────────────────────
 

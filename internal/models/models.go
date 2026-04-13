@@ -12,6 +12,8 @@ type Block struct {
 type Page struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
+	Icon      string    `json:"icon"`
+	ParentID  string    `json:"parent_id"`
 	Content   []Block   `json:"content"`
 	Version   int       `json:"version"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -20,5 +22,8 @@ type Page struct {
 type PageSummary struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
+	Icon      string    `json:"icon"`
+	ParentID  string    `json:"parent_id"`
+	Version   int       `json:"version"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

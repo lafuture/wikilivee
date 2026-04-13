@@ -5,7 +5,10 @@
       "Bash(sed -i '' 's|^module paired$|module wikilivee|' /Users/zakharbakhmutov/Desktop/WikiLivee/go.mod)",
       "Bash(xargs ls:*)",
       "Bash(go build:*)",
-      "Bash(go get:*)"
+      "Bash(go get:*)",
+      "Bash(grep -n \"func.*Handler\" /Users/zakharbakhmutov/Desktop/WikiLivee/internal/handlers/*.go)",
+      "Bash(npm create:*)",
+      "Bash(npx @redocly/cli lint openapi.yaml)"
     ]
   }
 }

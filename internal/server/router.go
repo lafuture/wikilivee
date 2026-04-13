@@ -32,18 +32,38 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
-	
+
 	r.Get("/api/pages", handler.GetPagesHandler)
 	r.Post("/api/pages", handler.CreatePageHandler)
 	r.Get("/api/pages/{id}", handler.GetPageHandler)
 	r.Put("/api/pages/{id}", handler.SavePageHandler)
 	r.Delete("/api/pages/{id}", handler.DeletePageHandler)
 	r.Get("/api/pages/{id}/backlinks", handler.GetPageBacklinksHandler)
+	r.Get("/api/pages/{id}/children", handler.GetPageChildrenHandler)
+
+	r.Get("/api/pages/{id}/versions", handler.GetPageVersionsHandler)
+	r.Get("/api/pages/{id}/versions/{version}", handler.GetPageVersionHandler)
+	r.Post("/api/pages/{id}/versions/{version}/restore", handler.RestorePageVersionHandler)
+
+	//r.Post("/api/pages/search", handler.SearchPagesHandler)
+	//r.Get("/api/pages/graph", handler.GraphPagesHandler)
+
+	//r.Get("/api/pages/{id}/comments", handler.GetCommentsHandler)
+	//r.Post("/api/pages/{id}/comments", handler.AddCommentHandler)
+	//r.Delete("/api/pages/{id}/comments", handler.DeleteCommentHandler)
+
+	//r.Post("/api/ai/complete", handler.GenerateHandler)
+	//r.Post("/api/ai/summarize", handler.SummarizeHandler)
+	//r.Post("/api/ai/suggest", handler.SuggestHandler)
 
 	r.Get("/api/tables", handler.GetTablesHandler)
 	r.Get("/api/tables/{id}", handler.GetTableHandler)
 
 	r.Get("/ws/pages/{id}", ws.NewHandler(hub))
+
+	r.Get("/openapi.yaml", serveFile("openapi.yaml"))
+	r.Get("/swagger-ui.html", serveFile("swagger-ui.html"))
+	r.Get("/redoc-static.html", serveFile("redoc-static.html"))
 
 	root := staticRoot()
 	fs := http.FileServer(http.Dir(root))
@@ -61,4 +81,10 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 	})
 
 	return r
+}
+
+func serveFile(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, name)
+	}
 }
