@@ -19,8 +19,6 @@ func NewServer(cfg *config.Config, handler *handlers.Handler, hub *ws.Hub) *Serv
 			Addr:              cfg.ListenAddr,
 			Handler:           NewRouter(handler, hub, cfg.JWTSecret),
 			ReadHeaderTimeout: 5 * time.Second,
-			ReadTimeout:       10 * time.Second,
-			WriteTimeout:      10 * time.Second,
 			IdleTimeout:       60 * time.Second,
 		},
 	}
