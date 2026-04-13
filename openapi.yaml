@@ -1,17 +1,38 @@
 openapi: 3.0.3
 info:
   title: MWS Wiki API
-  version: 1.1.0
-  description: API для Wiki Editor (pages + tables + backlinks + collaboration)
+  version: 2.0.0
+  description: >
+    Полноценный Wiki Editor внутри MWS Tables.
+    Страницы, таблицы, backlinks, collaboration, versioning, comments, search, graph, AI.
 
 servers:
   - url: http://localhost:8080
+    description: Локальная разработка
+  - url: https://balooai.ru
+    description: Production
+
+security:
+  - bearerAuth: []
 
 paths:
 
+  # ════════════════════════════════════════════════════════
+  # PAGES
+  # ════════════════════════════════════════════════════════
+
   /api/pages:
     get:
+      tags: [Pages]
       summary: Список всех страниц
+      security: []
+      parameters:
+        - name: parentId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по родительской странице (null = корневые)
       responses:
         '200':
           description: Список страниц
@@ -21,8 +42,11 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PageSummary'
+
     post:
+      tags: [Pages]
       summary: Создать страницу
+      security: []
       requestBody:
         required: true
         content:
@@ -39,13 +63,11 @@ paths:
 
   /api/pages/{id}:
     get:
+      tags: [Pages]
       summary: Получить страницу
+      security: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/pageId'
       responses:
         '200':
           description: Страница
@@ -54,16 +76,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/Page'
         '404':
-          description: Страница не найдена
+          $ref: '#/components/responses/NotFound'
 
     put:
+      tags: [Pages]
       summary: Сохранить страницу (autosave)
+      security: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/pageId'
       requestBody:
         required: true
         content:
@@ -78,31 +98,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/UpdatePageResponse'
         '404':
-          description: Страница не найдена
+          $ref: '#/components/responses/NotFound'
 
     delete:
+      tags: [Pages]
       summary: Удалить страницу
+      security: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/pageId'
       responses:
         '204':
           description: Удалено
         '404':
-          description: Страница не найдена
+          $ref: '#/components/responses/NotFound'
 
   /api/pages/{id}/backlinks:
     get:
-      summary: Получить страницы, которые ссылаются на данную
+      tags: [Pages]
+      summary: Страницы которые ссылаются на данную
+      security: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/pageId'
       responses:
         '200':
           description: Список обратных ссылок
@@ -113,9 +129,199 @@ paths:
                 items:
                   $ref: '#/components/schemas/PageSummary'
 
+  /api/pages/{id}/children:
+    get:
+      tags: [Pages]
+      summary: Дочерние страницы
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/pageId'
+      responses:
+        '200':
+          description: Список дочерних страниц
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PageSummary'
+
+  # ════════════════════════════════════════════════════════
+  # VERSIONING
+  # ════════════════════════════════════════════════════════
+
+  /api/pages/{id}/versions:
+    get:
+      tags: [Versioning]
+      summary: История версий страницы
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/pageId'
+      responses:
+        '200':
+          description: Список версий
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PageVersionSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/pages/{id}/versions/{version}:
+    get:
+      tags: [Versioning]
+      summary: Получить конкретную версию
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/pageId'
+        - $ref: '#/components/parameters/version'
+      responses:
+        '200':
+          description: Версия страницы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageVersion'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/pages/{id}/versions/{version}/restore:
+    post:
+      tags: [Versioning]
+      summary: Откатить страницу к версии
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/pageId'
+        - $ref: '#/components/parameters/version'
+      responses:
+        '200':
+          description: Страница восстановлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdatePageResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ════════════════════════════════════════════════════════
+  # COMMENTS
+  # ════════════════════════════════════════════════════════
+
+  /api/pages/{id}/comments:
+    get:
+      tags: [Comments]
+      summary: Комментарии к странице
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/pageId'
+      responses:
+        '200':
+          description: Список комментариев
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Comment'
+
+    post:
+      tags: [Comments]
+      summary: Добавить комментарий
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/pageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+      responses:
+        '201':
+          description: Комментарий создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+
+  /api/pages/{id}/comments/{commentId}:
+    delete:
+      tags: [Comments]
+      summary: Удалить комментарий
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/pageId'
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Удалено
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ════════════════════════════════════════════════════════
+  # SEARCH
+  # ════════════════════════════════════════════════════════
+
+  /api/search:
+    get:
+      tags: [Search]
+      summary: Полнотекстовый поиск по страницам
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Поисковый запрос
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Результаты поиска
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SearchResult'
+
+  # ════════════════════════════════════════════════════════
+  # GRAPH
+  # ════════════════════════════════════════════════════════
+
+  /api/graph:
+    get:
+      tags: [Graph]
+      summary: Граф связей между страницами
+      security: []
+      responses:
+        '200':
+          description: Узлы и рёбра графа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Graph'
+
+  # ════════════════════════════════════════════════════════
+  # TABLES (proxy → MWS)
+  # ════════════════════════════════════════════════════════
+
   /api/tables:
     get:
-      summary: Получить список таблиц из MWS Tables
+      tags: [Tables]
+      summary: Список таблиц из MWS Tables
+      security: []
       responses:
         '200':
           description: Список таблиц
@@ -126,11 +332,13 @@ paths:
                 items:
                   $ref: '#/components/schemas/TableSummary'
         '502':
-          description: MWS Tables API недоступен
+          $ref: '#/components/responses/BadGateway'
 
   /api/tables/{id}:
     get:
+      tags: [Tables]
       summary: Получить таблицу из MWS Tables
+      security: []
       parameters:
         - name: id
           in: path
@@ -145,26 +353,153 @@ paths:
               schema:
                 $ref: '#/components/schemas/Table'
         '502':
-          description: MWS Tables API недоступен
+          $ref: '#/components/responses/BadGateway'
+
+  # ════════════════════════════════════════════════════════
+  # AI (MWS GPT)
+  # ════════════════════════════════════════════════════════
+
+  /api/ai/complete:
+    post:
+      tags: [AI]
+      summary: Генерация текста
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIRequest'
+      responses:
+        '200':
+          description: Сгенерированный текст
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIResponse'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+
+  /api/ai/summarize:
+    post:
+      tags: [AI]
+      summary: Суммаризация страницы
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pageId]
+              properties:
+                pageId:
+                  type: string
+      responses:
+        '200':
+          description: Краткое содержание
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIResponse'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+
+  /api/ai/suggest:
+    post:
+      tags: [AI]
+      summary: Предложить следующий блок
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [context]
+              properties:
+                context:
+                  type: string
+                  description: Текущий текст страницы
+      responses:
+        '200':
+          description: Предложенный блок
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIResponse'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+
+  # ════════════════════════════════════════════════════════
+  # WEBSOCKET
+  # ════════════════════════════════════════════════════════
 
   /ws/pages/{id}:
     get:
-      summary: WebSocket для совместного редактирования страницы
+      tags: [Collaboration]
+      summary: WebSocket для совместного редактирования
+      security: []
       description: >
         Upgrade до WebSocket. После подключения клиент получает и отправляет
-        сообщения типа `PageEvent`.
+        сообщения типа `PageEvent`. При получении `update` — изменения
+        сохраняются в БД и рассылаются всем участникам комнаты.
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/pageId'
       responses:
         '101':
           description: Switching Protocols — соединение установлено
+        '400':
+          description: Не WebSocket запрос
 
 components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    pageId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: ID страницы
+    version:
+      name: version
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Номер версии
+
+  responses:
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadGateway:
+      description: Внешний API недоступен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: page not found
+
+    # ── Pages ────────────────────────────────────────────
 
     PageSummary:
       type: object
@@ -173,6 +508,9 @@ components:
           type: string
         title:
           type: string
+        parentId:
+          type: string
+          nullable: true
         updatedAt:
           type: string
           format: date-time
@@ -184,6 +522,9 @@ components:
           type: string
         title:
           type: string
+        parentId:
+          type: string
+          nullable: true
         content:
           type: array
           items:
@@ -196,18 +537,18 @@ components:
 
     CreatePageRequest:
       type: object
-      required:
-        - title
+      required: [title]
       properties:
         title:
           type: string
+        parentId:
+          type: string
+          nullable: true
+          description: ID родительской страницы для иерархии
 
     UpdatePageRequest:
       type: object
-      required:
-        - title
-        - content
-        - version
+      required: [title, content, version]
       properties:
         title:
           type: string
@@ -245,23 +586,148 @@ components:
         props:
           type: object
           additionalProperties: true
+          description: >
+            Дополнительные свойства блока.
+            Для table_embed: { tableId: string }.
+            Для page_link: { targetId: string, targetTitle: string }.
+            Для heading: { level: 1|2|3 }.
+
+    # ── Versioning ───────────────────────────────────────
+
+    PageVersionSummary:
+      type: object
+      properties:
+        version:
+          type: integer
+        savedAt:
+          type: string
+          format: date-time
+
+    PageVersion:
+      type: object
+      properties:
+        pageId:
+          type: string
+        version:
+          type: integer
+        title:
+          type: string
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Block'
+        savedAt:
+          type: string
+          format: date-time
+
+    # ── Comments ─────────────────────────────────────────
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+        pageId:
+          type: string
+        author:
+          type: string
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateCommentRequest:
+      type: object
+      required: [author, text]
+      properties:
+        author:
+          type: string
+        text:
+          type: string
+
+    # ── Search ───────────────────────────────────────────
+
+    SearchResult:
+      type: object
+      properties:
+        pageId:
+          type: string
+        title:
+          type: string
+        snippet:
+          type: string
+          description: Фрагмент текста с совпадением
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ── Graph ────────────────────────────────────────────
+
+    Graph:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphEdge'
+
+    GraphNode:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+
+    GraphEdge:
+      type: object
+      properties:
+        source:
+          type: string
+          description: ID страницы-источника
+        target:
+          type: string
+          description: ID страницы-цели
+
+    # ── WebSocket ────────────────────────────────────────
 
     PageEvent:
       type: object
-      description: Сообщение WebSocket для collaboration
       properties:
         type:
           type: string
-          enum:
-            - update
-            - join
-            - leave
-        pageId:
-          type: string
+          enum: [update, join, leave]
         userId:
           type: string
         payload:
           $ref: '#/components/schemas/UpdatePageRequest'
+
+    # ── AI ───────────────────────────────────────────────
+
+    AIRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+          example: Напиши введение для страницы о проекте
+        context:
+          type: string
+          nullable: true
+          description: Текущий текст страницы для контекста
+
+    AIResponse:
+      type: object
+      properties:
+        result:
+          type: string
+
+    # ── Tables ───────────────────────────────────────────
 
     TableSummary:
       type: object
