@@ -10,8 +10,8 @@ import (
 )
 
 type CursorPayload struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
+	Anchor int `json:"anchor"`
+	Head   int `json:"head"`
 }
 
 var upgrader = websocket.Upgrader{

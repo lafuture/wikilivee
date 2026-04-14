@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS table_cells;
+DROP TABLE IF EXISTS table_rows;
+DROP TABLE IF EXISTS table_columns;
+DROP TABLE IF EXISTS tables;

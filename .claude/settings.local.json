@@ -8,7 +8,8 @@
       "Bash(go get:*)",
       "Bash(grep -n \"func.*Handler\" /Users/zakharbakhmutov/Desktop/WikiLivee/internal/handlers/*.go)",
       "Bash(npm create:*)",
-      "Bash(npx @redocly/cli lint openapi.yaml)"
+      "Bash(npx @redocly/cli lint openapi.yaml)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

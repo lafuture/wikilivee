@@ -1,0 +1,3 @@
+ALTER TABLE pages
+    DROP COLUMN IF EXISTS icon,
+    DROP COLUMN IF EXISTS parent_id;

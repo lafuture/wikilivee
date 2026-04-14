@@ -3,24 +3,19 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 	"wikilivee/config"
 	"wikilivee/internal/database"
 )
 
 type Handler struct {
-	db         *database.Postgres
-	cfg        *config.Config
-	mwsClient  *http.Client
+	db  *database.Postgres
+	cfg *config.Config
 }
 
 func NewHandler(db *database.Postgres, cfg *config.Config) *Handler {
 	return &Handler{
 		db:  db,
 		cfg: cfg,
-		mwsClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
 	}
 }
 

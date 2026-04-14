@@ -1,46 +1,198 @@
 package handlers
 
 import (
-	"fmt"
-	"io"
+	"encoding/json"
 	"net/http"
+	"wikilivee/internal/models"
 
 	"github.com/go-chi/chi/v5"
 )
 
+type CreateTableRequest struct {
+	Name    string                   `json:"name"`
+	Columns []models.TableColumnSpec `json:"columns"`
+}
+
+type UpdateTableRequest struct {
+	Name string `json:"name"`
+}
+
+type AddColumnRequest struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type UpdateRowRequest struct {
+	Values map[string]string `json:"values"`
+}
+
 func (h *Handler) GetTablesHandler(w http.ResponseWriter, r *http.Request) {
-	h.proxyMWS(w, r, fmt.Sprintf("%s/tables", h.cfg.MWSTablesURL))
+	tables, err := h.db.GetTables(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+	if tables == nil {
+		tables = []models.TableSummary{}
+	}
+	writeJSON(w, http.StatusOK, tables)
+}
+
+func (h *Handler) CreateTableHandler(w http.ResponseWriter, r *http.Request) {
+	var req CreateTableRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	if req.Columns == nil {
+		req.Columns = []models.TableColumnSpec{}
+	}
+
+	table, err := h.db.CreateTable(r.Context(), req.Name, req.Columns)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, table)
 }
 
 func (h *Handler) GetTableHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.proxyMWS(w, r, fmt.Sprintf("%s/tables/%s", h.cfg.MWSTablesURL, id))
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
+	}
+
+	table, err := h.db.GetTable(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "table not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, table)
 }
 
-func (h *Handler) proxyMWS(w http.ResponseWriter, r *http.Request, url string) {
-	if h.cfg.MWSTablesURL == "" {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "MWS Tables API not configured"})
+func (h *Handler) UpdateTableHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
+	var req UpdateTableRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	table, err := h.db.UpdateTable(r.Context(), id, req.Name)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to build request"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "table not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, table)
+}
+
+func (h *Handler) DeleteTableHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
 
-	if h.cfg.MWSTablesAPIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+h.cfg.MWSTablesAPIKey)
+	if err := h.db.DeleteTable(r.Context(), id); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "table not found"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) AddColumnHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
 	}
 
-	resp, err := h.mwsClient.Do(req)
+	var req AddColumnRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	if req.Type == "" {
+		req.Type = "text"
+	}
+
+	col, err := h.db.AddColumn(r.Context(), id, req.Name, req.Type)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "MWS Tables API unreachable"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
 		return
 	}
-	defer resp.Body.Close()
+	writeJSON(w, http.StatusCreated, col)
+}
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+func (h *Handler) DeleteColumnHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	colId := chi.URLParam(r, "colId")
+	if id == "" || colId == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
+	}
+
+	if err := h.db.DeleteColumn(r.Context(), id, colId); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "column not found"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) AddRowHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
+	}
+
+	row, err := h.db.AddRow(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, row)
+}
+
+func (h *Handler) UpdateRowHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	rowId := chi.URLParam(r, "rowId")
+	if id == "" || rowId == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
+	}
+
+	var req UpdateRowRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	row, err := h.db.UpdateRow(r.Context(), id, rowId, req.Values)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "row not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, row)
+}
+
+func (h *Handler) DeleteRowHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	rowId := chi.URLParam(r, "rowId")
+	if id == "" || rowId == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
+	}
+
+	if err := h.db.DeleteRow(r.Context(), id, rowId); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "row not found"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

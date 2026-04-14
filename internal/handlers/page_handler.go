@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"wikilivee/internal/middleware"
 	"wikilivee/internal/models"
 
 	"github.com/go-chi/chi/v5"
@@ -52,7 +53,8 @@ func (h *Handler) CreatePageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, err := h.db.CreatePage(r.Context(), newID(), req.Title, req.Icon, req.ParentId)
+	username, _ := r.Context().Value(middleware.UsernameKey).(string)
+	page, err := h.db.CreatePage(r.Context(), newID(), req.Title, req.Icon, req.ParentId, username)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
 		return
@@ -88,7 +90,7 @@ func (h *Handler) SavePageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newVersion, err := h.db.SavePage(r.Context(), id, req.Title, req.Content)
+	newVersion, err := h.db.SavePage(r.Context(), id, req.Title, req.Content, req.Version)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "page not found"})
 		return
@@ -195,27 +197,82 @@ func (h *Handler) RestorePageVersionHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err := h.db.RestorePage(r.Context(), id, version)
+	newVersion, err := h.db.RestorePage(r.Context(), id, version)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "can not restore the page"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, nil)
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "version": newVersion})
 }
 
-//func (h *Handler) GetCommentsHandler(w http.ResponseWriter, r *http.Request) {
-//	id := chi.URLParam(r, "id")
-//	if id == "" {
-//		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
-//		return
-//	}
-//
-//	comments, err := h.db.GetCommentsHandler(r.Context(), id)
-//	if err != nil {
-//		writeJSON(w, http.StatusNotFound, map[string]string{"error": "comment not found"})
-//		return
-//	}
-//
-//	writeJSON(w, http.StatusOK, comments)
-//}
+func (h *Handler) SearchPagesHandler(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, []any{})
+}
+
+func (h *Handler) GraphPagesHandler(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"nodes": []any{}, "edges": []any{}})
+}
+
+type AddCommentRequest struct {
+	Author     string `json:"author"`
+	Text       string `json:"text"`
+	AnchorFrom int    `json:"anchorFrom"`
+	AnchorTo   int    `json:"anchorTo"`
+	AnchorText string `json:"anchorText"`
+}
+
+func (h *Handler) GetCommentsHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
+	}
+
+	comments, err := h.db.GetComments(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, comments)
+}
+
+func (h *Handler) AddCommentHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
+	}
+
+	var req AddCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	if req.Author == "" || req.Text == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "author and text required"})
+		return
+	}
+
+	comment, err := h.db.CreateComment(r.Context(), id, req.Author, req.Text, req.AnchorFrom, req.AnchorTo, req.AnchorText)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, comment)
+}
+
+func (h *Handler) DeleteCommentHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	commentID := r.URL.Query().Get("commentId")
+	if id == "" || commentID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing id or commentId"})
+		return
+	}
+
+	if err := h.db.DeleteComment(r.Context(), id, commentID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

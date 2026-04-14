@@ -1,10 +1,12 @@
 openapi: 3.0.3
 info:
-  title: MWS Wiki API
-  version: 2.0.0
+  title: WikiLivee API
+  version: 3.0.0
   description: >
-    Полноценный Wiki Editor внутри MWS Tables.
-    Страницы, таблицы, backlinks, collaboration, versioning, comments, search, graph, AI.
+    Wiki-редактор с совместным редактированием в реальном времени.
+    Страницы, таблицы (локальное хранение в PostgreSQL), backlinks,
+    collaboration (WebSocket), версионирование, якорные комментарии,
+    авторизация через JWT.
   license:
     name: MIT
 
@@ -20,6 +22,96 @@ security:
 paths:
 
   # ════════════════════════════════════════════════════════
+  # AUTH
+  # ════════════════════════════════════════════════════════
+
+  /api/auth/register:
+    post:
+      operationId: register
+      tags: [Auth]
+      summary: Регистрация нового пользователя
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+            example:
+              username: alice
+              password: secret123
+      responses:
+        '201':
+          description: Пользователь создан, токен выдан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Username уже занят
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/auth/login:
+    post:
+      operationId: login
+      tags: [Auth]
+      summary: Вход в систему
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+            example:
+              username: alice
+              password: secret123
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Неверный логин или пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/auth/me:
+    get:
+      operationId: getMe
+      tags: [Auth]
+      summary: Текущий пользователь (из токена)
+      responses:
+        '200':
+          description: Данные пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                  username:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ════════════════════════════════════════════════════════
   # PAGES
   # ════════════════════════════════════════════════════════
 
@@ -28,14 +120,6 @@ paths:
       operationId: listPages
       tags: [Pages]
       summary: Список всех страниц
-      security: []
-      parameters:
-        - name: parentId
-          in: query
-          required: false
-          schema:
-            type: string
-          description: Фильтр по родительской странице (null = корневые)
       responses:
         '200':
           description: Список страниц
@@ -45,14 +129,15 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PageSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/InternalError'
 
     post:
       operationId: createPage
       tags: [Pages]
-      summary: Создать страницу
-      security: []
+      summary: Создать страницу (author = текущий пользователь)
       requestBody:
         required: true
         content:
@@ -68,6 +153,8 @@ paths:
                 $ref: '#/components/schemas/Page'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -76,7 +163,6 @@ paths:
       operationId: getPage
       tags: [Pages]
       summary: Получить страницу
-      security: []
       parameters:
         - $ref: '#/components/parameters/pageId'
       responses:
@@ -86,14 +172,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
     put:
       operationId: savePage
       tags: [Pages]
-      summary: Сохранить страницу (autosave)
-      security: []
+      summary: Сохранить страницу (autosave). Создаёт снапшот в page_versions
       parameters:
         - $ref: '#/components/parameters/pageId'
       requestBody:
@@ -111,6 +200,8 @@ paths:
                 $ref: '#/components/schemas/UpdatePageResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -118,12 +209,15 @@ paths:
       operationId: deletePage
       tags: [Pages]
       summary: Удалить страницу
-      security: []
       parameters:
         - $ref: '#/components/parameters/pageId'
       responses:
         '204':
           description: Удалено
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -131,8 +225,7 @@ paths:
     get:
       operationId: getPageBacklinks
       tags: [Pages]
-      summary: Страницы которые ссылаются на данную
-      security: []
+      summary: Страницы, которые ссылаются на данную (через wikiLink-блоки)
       parameters:
         - $ref: '#/components/parameters/pageId'
       responses:
@@ -144,15 +237,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PageSummary'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/pages/{id}/children:
     get:
       operationId: getPageChildren
       tags: [Pages]
       summary: Дочерние страницы
-      security: []
       parameters:
         - $ref: '#/components/parameters/pageId'
       responses:
@@ -164,6 +260,10 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PageSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -176,18 +276,21 @@ paths:
       operationId: getPageVersions
       tags: [Versioning]
       summary: История версий страницы
-      security: []
       parameters:
         - $ref: '#/components/parameters/pageId'
       responses:
         '200':
-          description: Список версий
+          description: Список версий, отсортированных по убыванию
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/PageVersionSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -196,7 +299,6 @@ paths:
       operationId: getPageVersion
       tags: [Versioning]
       summary: Получить конкретную версию
-      security: []
       parameters:
         - $ref: '#/components/parameters/pageId'
         - $ref: '#/components/parameters/version'
@@ -207,6 +309,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PageVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -214,50 +320,55 @@ paths:
     post:
       operationId: restorePageVersion
       tags: [Versioning]
-      summary: Откатить страницу к версии
-      security: []
+      summary: Откатить страницу к версии. Сохраняет новый снапшот в page_versions
       parameters:
         - $ref: '#/components/parameters/pageId'
         - $ref: '#/components/parameters/version'
       responses:
         '200':
-          description: Страница восстановлена
+          description: Страница восстановлена, новая версия возвращена
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UpdatePageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
   # ════════════════════════════════════════════════════════
-  # COMMENTS
+  # COMMENTS (якорные — привязаны к позиции в тексте)
   # ════════════════════════════════════════════════════════
 
   /api/pages/{id}/comments:
     get:
       operationId: getComments
       tags: [Comments]
-      summary: Комментарии к странице
-      security: []
+      summary: Комментарии к странице (с якорными позициями)
       parameters:
         - $ref: '#/components/parameters/pageId'
       responses:
         '200':
-          description: Список комментариев
+          description: Список комментариев, отсортированных по дате создания
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Comment'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
     post:
       operationId: addComment
       tags: [Comments]
-      summary: Добавить комментарий
-      security: []
+      summary: Добавить комментарий. anchorFrom/anchorTo — позиции ProseMirror
       parameters:
         - $ref: '#/components/parameters/pageId'
       requestBody:
@@ -266,6 +377,12 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateCommentRequest'
+            example:
+              author: Alice
+              text: Нужно уточнить этот момент
+              anchorFrom: 42
+              anchorTo: 58
+              anchorText: уточнить этот момент
       responses:
         '201':
           description: Комментарий создан
@@ -275,14 +392,15 @@ paths:
                 $ref: '#/components/schemas/Comment'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
     delete:
       operationId: deleteComment
       tags: [Comments]
       summary: Удалить комментарий
-      security: []
       parameters:
         - $ref: '#/components/parameters/pageId'
         - name: commentId
@@ -290,14 +408,17 @@ paths:
           required: true
           schema:
             type: string
-          description: ID комментария для удаления
+            format: uuid
+          description: UUID комментария
       responses:
         '204':
           description: Удалено
         '400':
           $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   # ════════════════════════════════════════════════════════
   # SEARCH
@@ -308,21 +429,6 @@ paths:
       operationId: searchPages
       tags: [Search]
       summary: Полнотекстовый поиск по страницам
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [q]
-              properties:
-                q:
-                  type: string
-                  description: Поисковый запрос
-                limit:
-                  type: integer
-                  default: 20
       responses:
         '200':
           description: Результаты поиска
@@ -332,8 +438,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SearchResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   # ════════════════════════════════════════════════════════
   # GRAPH
@@ -343,8 +449,7 @@ paths:
     get:
       operationId: getPagesGraph
       tags: [Graph]
-      summary: Граф связей между страницами
-      security: []
+      summary: Граф связей между страницами (wikiLink-рёбра)
       responses:
         '200':
           description: Узлы и рёбра графа
@@ -352,19 +457,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Graph'
-        '500':
-          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   # ════════════════════════════════════════════════════════
-  # TABLES (proxy → MWS)
+  # TABLES (локальное хранение в PostgreSQL)
   # ════════════════════════════════════════════════════════
 
   /api/tables:
     get:
       operationId: listTables
       tags: [Tables]
-      summary: Список таблиц из MWS Tables
-      security: []
+      summary: Список всех таблиц
       responses:
         '200':
           description: Список таблиц
@@ -374,21 +478,49 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/TableSummary'
-        '502':
-          $ref: '#/components/responses/BadGateway'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      operationId: createTable
+      tags: [Tables]
+      summary: Создать таблицу с колонками
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTableRequest'
+            example:
+              name: Задачи
+              columns:
+                - name: Название
+                  type: text
+                - name: Статус
+                  type: text
+      responses:
+        '201':
+          description: Таблица создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/tables/{id}:
     get:
       operationId: getTable
       tags: [Tables]
-      summary: Получить таблицу из MWS Tables
-      security: []
+      summary: Получить таблицу со всеми колонками и строками
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/tableId'
       responses:
         '200':
           description: Таблица
@@ -396,93 +528,190 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Table'
-        '502':
-          $ref: '#/components/responses/BadGateway'
-
-  # ════════════════════════════════════════════════════════
-  # AI (MWS GPT)
-  # ════════════════════════════════════════════════════════
-
-  /api/ai/complete:
-    post:
-      operationId: aiComplete
-      tags: [AI]
-      summary: Генерация текста
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AIRequest'
-      responses:
-        '200':
-          description: Сгенерированный текст
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AIResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '502':
-          $ref: '#/components/responses/BadGateway'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
-  /api/ai/summarize:
-    post:
-      operationId: aiSummarize
-      tags: [AI]
-      summary: Суммаризация страницы
-      security: []
+    put:
+      operationId: updateTable
+      tags: [Tables]
+      summary: Переименовать таблицу
+      parameters:
+        - $ref: '#/components/parameters/tableId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [pageId]
+              required: [name]
               properties:
-                pageId:
+                name:
                   type: string
       responses:
         '200':
-          description: Краткое содержание
+          description: Таблица обновлена
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AIResponse'
+                $ref: '#/components/schemas/Table'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '502':
-          $ref: '#/components/responses/BadGateway'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
-  /api/ai/suggest:
+    delete:
+      operationId: deleteTable
+      tags: [Tables]
+      summary: Удалить таблицу (CASCADE удаляет колонки, строки, ячейки)
+      parameters:
+        - $ref: '#/components/parameters/tableId'
+      responses:
+        '204':
+          description: Удалено
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tables/{id}/columns:
     post:
-      operationId: aiSuggest
-      tags: [AI]
-      summary: Предложить следующий блок
-      security: []
+      operationId: addColumn
+      tags: [Tables]
+      summary: Добавить колонку в таблицу
+      parameters:
+        - $ref: '#/components/parameters/tableId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [context]
-              properties:
-                context:
-                  type: string
-                  description: Текущий текст страницы
+              $ref: '#/components/schemas/AddColumnRequest'
       responses:
-        '200':
-          description: Предложенный блок
+        '201':
+          description: Колонка добавлена
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AIResponse'
+                $ref: '#/components/schemas/TableColumn'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '502':
-          $ref: '#/components/responses/BadGateway'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/tables/{id}/columns/{colId}:
+    delete:
+      operationId: deleteColumn
+      tags: [Tables]
+      summary: Удалить колонку (CASCADE удаляет ячейки)
+      parameters:
+        - $ref: '#/components/parameters/tableId'
+        - name: colId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID колонки
+      responses:
+        '204':
+          description: Удалено
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tables/{id}/rows:
+    post:
+      operationId: addRow
+      tags: [Tables]
+      summary: Добавить пустую строку в таблицу
+      parameters:
+        - $ref: '#/components/parameters/tableId'
+      responses:
+        '201':
+          description: Строка добавлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/tables/{id}/rows/{rowId}:
+    put:
+      operationId: updateRow
+      tags: [Tables]
+      summary: Обновить ячейки строки (upsert). values — map columnId → value
+      parameters:
+        - $ref: '#/components/parameters/tableId'
+        - name: rowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID строки
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRowRequest'
+            example:
+              values:
+                "col-uuid-1": "Задача А"
+                "col-uuid-2": "В работе"
+      responses:
+        '200':
+          description: Строка обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: deleteRow
+      tags: [Tables]
+      summary: Удалить строку
+      parameters:
+        - $ref: '#/components/parameters/tableId'
+        - name: rowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Удалено
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   # ════════════════════════════════════════════════════════
   # WEBSOCKET
@@ -499,20 +728,20 @@ paths:
         всем в комнате сообщение `presence` с обновлённым списком участников.
 
 
-        **Входящие сообщения (клиент → сервер)** — схема `WsUpdateEvent` или `WsCursorEvent`:
+        **Входящие сообщения (клиент → сервер)**:
 
         - `update` — сохраняет страницу в БД и рассылает всем остальным
 
-        - `cursor` — передаёт позицию курсора остальным участникам (не сохраняется)
+        - `cursor` — передаёт позицию текстового курсора (ProseMirror anchor/head)
 
 
-        **Исходящие сообщения (сервер → клиент)** — схема `WsUpdateEvent`, `WsCursorEvent` или `WsPresenceEvent`:
+        **Исходящие сообщения (сервер → клиент)**:
 
         - `update` — изменения страницы от другого участника
 
         - `cursor` — позиция курсора другого участника
 
-        - `presence` — актуальный список участников в комнате (отправляется при join/leave)
+        - `presence` — актуальный список участников (при join/leave)
       parameters:
         - $ref: '#/components/parameters/pageId'
         - name: userId
@@ -520,20 +749,20 @@ paths:
           required: false
           schema:
             type: string
-          description: ID пользователя. Если не указан — генерируется случайный anon-XXXXX
+          description: ID пользователя. Если не указан — генерируется anon-XXXXX
         - name: name
           in: query
           required: false
           schema:
             type: string
-          description: Имя пользователя для отображения. По умолчанию "Anonymous"
+          description: Отображаемое имя. По умолчанию "Anonymous"
         - name: color
           in: query
           required: false
           schema:
             type: string
             example: '#3b82f6'
-          description: HEX цвет курсора. Если не указан — выбирается случайный из палитры
+          description: HEX цвет курсора и аватарки
       responses:
         '101':
           description: Switching Protocols — соединение установлено
@@ -551,6 +780,9 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: >
+        JWT токен выдаётся при /api/auth/login или /api/auth/register.
+        Срок действия — 30 дней.
 
   parameters:
     pageId:
@@ -559,7 +791,15 @@ components:
       required: true
       schema:
         type: string
-      description: ID страницы
+      description: TEXT ID страницы (hex-строка 32 символа)
+    tableId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID таблицы
     version:
       name: version
       in: path
@@ -575,20 +815,20 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Требуется авторизация (Bearer токен отсутствует или невалиден)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     NotFound:
-      description: Не найдено
+      description: Ресурс не найден
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     InternalError:
       description: Внутренняя ошибка сервера
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    BadGateway:
-      description: Внешний API недоступен
       content:
         application/json:
           schema:
@@ -603,6 +843,33 @@ components:
           type: string
           example: page not found
 
+    # ── Auth ─────────────────────────────────────────────
+
+    AuthRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 2
+          example: alice
+        password:
+          type: string
+          minLength: 4
+          format: password
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT токен. Срок действия 30 дней
+        userId:
+          type: string
+          format: uuid
+        username:
+          type: string
+
     # ── Pages ────────────────────────────────────────────
 
     PageSummary:
@@ -614,9 +881,11 @@ components:
           type: string
         icon:
           type: string
-        parentId:
+          example: 📄
+        parent_id:
           type: string
           nullable: true
+          description: ID родительской страницы
         version:
           type: integer
         updatedAt:
@@ -632,7 +901,8 @@ components:
           type: string
         icon:
           type: string
-        parentId:
+          example: 📄
+        parent_id:
           type: string
           nullable: true
         content:
@@ -647,16 +917,17 @@ components:
 
     CreatePageRequest:
       type: object
-      required: [title]
       properties:
         title:
           type: string
+          default: ''
         icon:
           type: string
+          default: 📄
         parentId:
           type: string
           nullable: true
-          description: ID родительской страницы для иерархии
+          description: ID родительской страницы
 
     UpdatePageRequest:
       type: object
@@ -670,6 +941,7 @@ components:
             $ref: '#/components/schemas/Block'
         version:
           type: integer
+          description: Текущая версия клиента (для оптимистичного контроля)
 
     UpdatePageResponse:
       type: object
@@ -678,9 +950,11 @@ components:
           type: string
         version:
           type: integer
+          description: Новая версия после сохранения
 
     Block:
       type: object
+      required: [id, type]
       properties:
         id:
           type: string
@@ -695,14 +969,16 @@ components:
         content:
           type: string
           nullable: true
+          description: Текстовое содержимое блока
         props:
           type: object
           additionalProperties: true
           description: >
-            Дополнительные свойства блока.
-            Для table_embed: { tableId: string }.
-            Для page_link: { targetId: string, targetTitle: string }.
-            Для heading: { level: 1|2|3 }.
+            Дополнительные свойства блока:
+            heading → { level: 1|2|3, tiptapContent: [...] };
+            table_embed → { tableId: string, tableName: string };
+            page_link → { targetId: string, targetTitle: string };
+            list → { ordered: boolean, tiptapContent: [...] }.
 
     # ── Versioning ───────────────────────────────────────
 
@@ -739,36 +1015,45 @@ components:
       properties:
         id:
           type: string
+          format: uuid
         pageId:
           type: string
-        anchorBlockId:
-          type: string
-          description: ID блока к которому прикреплён комментарий
-        anchorText:
-          type: string
-          description: Снапшот выделенного текста на момент создания комментария
         author:
           type: string
         text:
           type: string
+        anchorFrom:
+          type: integer
+          description: Начальная позиция выделения в ProseMirror (0 = нет якоря)
+        anchorTo:
+          type: integer
+          description: Конечная позиция выделения в ProseMirror
+        anchorText:
+          type: string
+          description: Снапшот выделенного текста на момент создания комментария
         createdAt:
           type: string
           format: date-time
 
     CreateCommentRequest:
       type: object
-      required: [anchorBlockId, text]
+      required: [author, text]
       properties:
-        anchorBlockId:
-          type: string
-          description: ID блока к которому прикрепляется комментарий
-        anchorText:
-          type: string
-          description: Выделенный текст (снапшот)
         author:
           type: string
         text:
           type: string
+        anchorFrom:
+          type: integer
+          default: 0
+          description: Начальная позиция в ProseMirror (0 = без якоря)
+        anchorTo:
+          type: integer
+          default: 0
+        anchorText:
+          type: string
+          default: ''
+          description: Выделенный текст (снапшот)
 
     # ── Search ───────────────────────────────────────────
 
@@ -816,13 +1101,13 @@ components:
           description: ID страницы-источника
         target:
           type: string
-          description: ID страницы-цели
+          description: ID страницы-цели (на кого ссылается)
 
-    # ── WebSocket ────────────────────────────────────────
+    # ── WebSocket events ─────────────────────────────────
 
     WsUpdateEvent:
       type: object
-      description: Изменение содержимого страницы (клиент↔сервер)
+      description: Изменение содержимого страницы (клиент ↔ сервер)
       required: [type, userId, payload]
       properties:
         type:
@@ -831,11 +1116,23 @@ components:
         userId:
           type: string
         payload:
-          $ref: '#/components/schemas/UpdatePageRequest'
+          type: object
+          required: [title, content, version]
+          properties:
+            title:
+              type: string
+            content:
+              type: array
+              items:
+                $ref: '#/components/schemas/Block'
+            version:
+              type: integer
 
     WsCursorEvent:
       type: object
-      description: Позиция курсора участника (клиент↔сервер, не сохраняется в БД)
+      description: >
+        Позиция текстового курсора участника (клиент ↔ сервер, не сохраняется в БД).
+        anchor и head — позиции ProseMirror; если anchor ≠ head — это выделение.
       required: [type, userId, cursor]
       properties:
         type:
@@ -848,7 +1145,7 @@ components:
 
     WsPresenceEvent:
       type: object
-      description: Список участников в комнате (только сервер→клиент, при join/leave)
+      description: Список участников в комнате (только сервер → клиент, при join/leave)
       required: [type, users]
       properties:
         type:
@@ -861,21 +1158,15 @@ components:
 
     CursorPayload:
       type: object
-      description: Координаты курсора в долях от размера окна (0..1)
-      required: [x, y]
+      description: Позиция текстового курсора (позиции ProseMirror)
+      required: [anchor, head]
       properties:
-        x:
-          type: number
-          format: float
-          minimum: 0
-          maximum: 1
-          description: Горизонтальная позиция (0 = левый край, 1 = правый)
-        y:
-          type: number
-          format: float
-          minimum: 0
-          maximum: 1
-          description: Вертикальная позиция (0 = верх, 1 = низ)
+        anchor:
+          type: integer
+          description: Начало выделения (= позиция курсора при отсутствии выделения)
+        head:
+          type: integer
+          description: Конец выделения (= anchor при отсутствии выделения)
 
     PresenceUser:
       type: object
@@ -888,28 +1179,8 @@ components:
           type: string
         color:
           type: string
-          example: '#3b82f6'
+          example: '#0f7b6c'
           description: HEX цвет для отображения курсора и аватарки
-
-    # ── AI ───────────────────────────────────────────────
-
-    AIRequest:
-      type: object
-      required: [prompt]
-      properties:
-        prompt:
-          type: string
-          example: Напиши введение для страницы о проекте
-        context:
-          type: string
-          nullable: true
-          description: Текущий текст страницы для контекста
-
-    AIResponse:
-      type: object
-      properties:
-        result:
-          type: string
 
     # ── Tables ───────────────────────────────────────────
 
@@ -918,16 +1189,30 @@ components:
       properties:
         id:
           type: string
+          format: uuid
         name:
           type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     Table:
       type: object
       properties:
         id:
           type: string
+          format: uuid
         name:
           type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
         columns:
           type: array
           items:
@@ -937,21 +1222,82 @@ components:
           items:
             $ref: '#/components/schemas/TableRow'
 
+    CreateTableRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableColumnSpec'
+          default: []
+
+    TableColumnSpec:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [text, number, date, select]
+          default: text
+
+    AddColumnRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [text, number, date, select]
+          default: text
+
+    UpdateRowRequest:
+      type: object
+      required: [values]
+      properties:
+        values:
+          type: object
+          additionalProperties:
+            type: string
+          description: Map columnId (UUID) → string value. Только указанные ячейки обновляются (upsert)
+
     TableColumn:
       type: object
       properties:
         id:
           type: string
+          format: uuid
+        table_id:
+          type: string
+          format: uuid
         name:
           type: string
         type:
           type: string
+          enum: [text, number, date, select]
+        position:
+          type: integer
+          description: Порядковый номер колонки (0-based)
 
     TableRow:
       type: object
       properties:
         id:
           type: string
+          format: uuid
+        table_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
         values:
           type: object
-          additionalProperties: true
+          additionalProperties:
+            type: string
+          description: Map columnId (UUID) → string value

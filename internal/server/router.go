@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"wikilivee/internal/handlers"
+	apimw "wikilivee/internal/middleware"
 	"wikilivee/internal/ws"
 
 	"github.com/go-chi/chi/v5"
@@ -33,37 +34,46 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 		AllowCredentials: true,
 	}))
 
-	r.Get("/api/pages", handler.GetPagesHandler)
-	r.Post("/api/pages", handler.CreatePageHandler)
-	r.Get("/api/pages/{id}", handler.GetPageHandler)
-	r.Put("/api/pages/{id}", handler.SavePageHandler)
-	r.Delete("/api/pages/{id}", handler.DeletePageHandler)
-	r.Get("/api/pages/{id}/backlinks", handler.GetPageBacklinksHandler)
-	r.Get("/api/pages/{id}/children", handler.GetPageChildrenHandler)
+	r.Post("/api/auth/register", handler.RegisterHandler)
+	r.Post("/api/auth/login", handler.LoginHandler)
 
-	r.Get("/api/pages/{id}/versions", handler.GetPageVersionsHandler)
-	r.Get("/api/pages/{id}/versions/{version}", handler.GetPageVersionHandler)
-	r.Post("/api/pages/{id}/versions/{version}/restore", handler.RestorePageVersionHandler)
+	r.Group(func(r chi.Router) {
+		r.Use(apimw.Auth(jwtSecret))
 
-	//r.Post("/api/pages/search", handler.SearchPagesHandler)
-	//r.Get("/api/pages/graph", handler.GraphPagesHandler)
+		r.Get("/api/auth/me", handler.MeHandler)
 
-	//r.Get("/api/pages/{id}/comments", handler.GetCommentsHandler)
-	//r.Post("/api/pages/{id}/comments", handler.AddCommentHandler)
-	//r.Delete("/api/pages/{id}/comments", handler.DeleteCommentHandler)
+		r.Get("/api/pages", handler.GetPagesHandler)
+		r.Post("/api/pages", handler.CreatePageHandler)
+		r.Get("/api/pages/{id}", handler.GetPageHandler)
+		r.Put("/api/pages/{id}", handler.SavePageHandler)
+		r.Delete("/api/pages/{id}", handler.DeletePageHandler)
+		r.Get("/api/pages/{id}/backlinks", handler.GetPageBacklinksHandler)
+		r.Get("/api/pages/{id}/children", handler.GetPageChildrenHandler)
 
-	//r.Post("/api/ai/complete", handler.GenerateHandler)
-	//r.Post("/api/ai/summarize", handler.SummarizeHandler)
-	//r.Post("/api/ai/suggest", handler.SuggestHandler)
+		r.Get("/api/pages/{id}/versions", handler.GetPageVersionsHandler)
+		r.Get("/api/pages/{id}/versions/{version}", handler.GetPageVersionHandler)
+		r.Post("/api/pages/{id}/versions/{version}/restore", handler.RestorePageVersionHandler)
 
-	r.Get("/api/tables", handler.GetTablesHandler)
-	r.Get("/api/tables/{id}", handler.GetTableHandler)
+		r.Post("/api/pages/search", handler.SearchPagesHandler)
+		r.Get("/api/pages/graph", handler.GraphPagesHandler)
+
+		r.Get("/api/pages/{id}/comments", handler.GetCommentsHandler)
+		r.Post("/api/pages/{id}/comments", handler.AddCommentHandler)
+		r.Delete("/api/pages/{id}/comments", handler.DeleteCommentHandler)
+
+		r.Get("/api/tables", handler.GetTablesHandler)
+		r.Post("/api/tables", handler.CreateTableHandler)
+		r.Get("/api/tables/{id}", handler.GetTableHandler)
+		r.Put("/api/tables/{id}", handler.UpdateTableHandler)
+		r.Delete("/api/tables/{id}", handler.DeleteTableHandler)
+		r.Post("/api/tables/{id}/columns", handler.AddColumnHandler)
+		r.Delete("/api/tables/{id}/columns/{colId}", handler.DeleteColumnHandler)
+		r.Post("/api/tables/{id}/rows", handler.AddRowHandler)
+		r.Put("/api/tables/{id}/rows/{rowId}", handler.UpdateRowHandler)
+		r.Delete("/api/tables/{id}/rows/{rowId}", handler.DeleteRowHandler)
+	})
 
 	r.Get("/ws/pages/{id}", ws.NewHandler(hub))
-
-	r.Get("/openapi.yaml", serveFile("openapi.yaml"))
-	r.Get("/swagger-ui.html", serveFile("swagger-ui.html"))
-	r.Get("/redoc-static.html", serveFile("redoc-static.html"))
 
 	root := staticRoot()
 	fs := http.FileServer(http.Dir(root))
@@ -81,10 +91,4 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 	})
 
 	return r
-}
-
-func serveFile(name string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, name)
-	}
 }

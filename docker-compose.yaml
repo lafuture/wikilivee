@@ -16,7 +16,7 @@ services:
       - ./outernal:/app/outernal:ro
     environment:
       LISTEN_ADDR: "${LISTEN_ADDR:-:8080}"
-      STATIC_DIR: "${STATIC_DIR:-/app/outernal}"
+      STATIC_DIR: "${STATIC_DIR:-/app/outernal/dist}"
       JWT_SECRET: "${JWT_SECRET:-super-secret-key-change-me}"
       DB_URL: "${DB_URL:-postgresql://user:qwerty@db:5432/mydb?sslmode=disable}"
       MIGRA_URL: "${MIGRA_URL:-file:///app/internal/database/migrations}"
