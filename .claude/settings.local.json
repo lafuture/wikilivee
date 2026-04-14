@@ -9,7 +9,14 @@
       "Bash(grep -n \"func.*Handler\" /Users/zakharbakhmutov/Desktop/WikiLivee/internal/handlers/*.go)",
       "Bash(npm create:*)",
       "Bash(npx @redocly/cli lint openapi.yaml)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(docker compose:*)",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"jjj\",\"password\":\"jjjj\"}')",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/register -H \"Content-Type: application/json\" -d '{\"username\":\"testuser\",\"password\":\"testpass\"}')",
+      "Bash(curl -s -X POST http://localhost:8080/api/pages -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzg3OTcyMDAsInVzZXJJZCI6IjdhNTEwN2ZkLTJlODctNGRhZS1hZDBiLWQ3MzdhYWU5MDQ4MCIsInVzZXJuYW1lIjoidGVzdHVzZXIifQ.E7ZykyLRj3Qk-HcrA5Y-OJxGRW0SYl85C8rkb7xT0q0' -d '{\"title\":\"Test\",\"icon\":\"\",\"parentId\":\"\"}')",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)"
     ]
   }
 }

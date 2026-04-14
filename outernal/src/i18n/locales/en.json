@@ -1,0 +1,155 @@
+{
+  "app": {
+    "title": "MWS Wiki Editor",
+    "loading": "Loading...",
+    "selectPage": "Select a page from the sidebar or create a new one",
+    "newPage": "New Page"
+  },
+  "auth": {
+    "checking": "Checking authentication...",
+    "login": "Login",
+    "register": "Register",
+    "loginTitle": "Sign in to WikiLivee",
+    "registerTitle": "Create an account",
+    "subtitle": "The API is now protected by JWT. Sign in first, then pages and sync will work correctly.",
+    "username": "Username",
+    "password": "Password",
+    "loading": "Submitting...",
+    "error": "Authentication failed"
+  },
+  "toast": {
+    "createPageFailed": "Failed to create page",
+    "savePageFailed": "Failed to save page",
+    "deletePageFailed": "Failed to delete page"
+  },
+  "sidebar": {
+    "logo": "MWS Wiki",
+    "pages": "Pages",
+    "newPage": "New page",
+    "deletePage": "Delete page",
+    "empty": "No pages yet. Click + to create one.",
+    "search": "Search...",
+    "noResults": "Nothing found",
+    "searching": "Searching all pages..."
+  },
+  "editor": {
+    "untitled": "Untitled",
+    "placeholder": "Type \"/\" for commands...",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "edited": "Edited",
+    "selectOrCreate": "Select or create a page",
+    "addCover": "Add cover",
+    "changeCover": "Change cover",
+    "removeCover": "Remove",
+    "pageTools": "Page tools",
+    "openUtilityMenu": "Open page menu",
+    "closeUtilityMenu": "Close page menu",
+    "live": "Live",
+    "offline": "Offline"
+  },
+  "slash": {
+    "text": "Text",
+    "textDesc": "Plain text block",
+    "heading1": "Heading 1",
+    "heading1Desc": "Large heading",
+    "heading2": "Heading 2",
+    "heading2Desc": "Medium heading",
+    "heading3": "Heading 3",
+    "heading3Desc": "Small heading",
+    "bulletList": "Bullet List",
+    "bulletListDesc": "Unordered list",
+    "numberedList": "Numbered List",
+    "numberedListDesc": "Ordered list",
+    "table": "Table (MWS)",
+    "tableDesc": "Embed MWS Table",
+    "pageLink": "Page Link",
+    "pageLinkDesc": "Link to page [[page]]"
+  },
+  "tablePicker": {
+    "title": "Insert MWS Table",
+    "search": "Search tables...",
+    "loading": "Loading...",
+    "empty": "No tables found",
+    "offline": "API offline — showing demo tables",
+    "unavailable": "MWS Tables API is unavailable",
+    "endpointMissing": "Tables endpoint is not mounted on the backend",
+    "errorPrefix": "Tables API error:"
+  },
+  "pageLinkPicker": {
+    "title": "Link to Page",
+    "search": "Search pages...",
+    "empty": "No pages found"
+  },
+  "backlinks": {
+    "title": "Backlinks"
+  },
+  "comments": {
+    "title": "Comments",
+    "authorPlaceholder": "Your name",
+    "textPlaceholder": "Write a comment...",
+    "add": "Add comment",
+    "submitting": "Sending...",
+    "empty": "No comments yet",
+    "delete": "Delete",
+    "selectionAttached": "This comment will be attached to the current selection",
+    "selectionEmpty": "Select text in the editor to attach the comment to a fragment",
+    "selectionFallback": "Jump to the linked fragment",
+    "loadError": "Failed to load comments",
+    "submitError": "Failed to send comment",
+    "deleteError": "Failed to delete comment"
+  },
+  "versions": {
+    "title": "Version History",
+    "short": "Version",
+    "current": "Current version: v{{version}}",
+    "loading": "Loading versions...",
+    "empty": "No versions yet",
+    "previewLoading": "Loading version...",
+    "versionLabel": "Version {{version}}",
+    "restore": "Restore",
+    "restoring": "Restoring...",
+    "currentBadge": "Current version",
+    "noPreview": "No text preview for this version",
+    "loadError": "Failed to load version history",
+    "previewError": "Failed to load selected version",
+    "restoreError": "Failed to restore version",
+    "refreshError": "Version restored, but page refresh failed"
+  },
+  "children": {
+    "title": "Child Pages",
+    "short": "Children",
+    "subtitle": "Hierarchy and quick navigation for nested notes",
+    "add": "New child",
+    "creating": "Creating...",
+    "loading": "Loading child pages...",
+    "empty": "No child pages yet",
+    "newPageTitle": "New child page"
+  },
+  "ai": {
+    "title": "AI Workspace",
+    "subtitle": "Summaries, next-block suggestions and prompt-based draft generation",
+    "prompt": "Prompt",
+    "promptPlaceholder": "For example: write an intro and a short section plan for this page",
+    "complete": "Generate",
+    "summarize": "Summarize",
+    "suggest": "Suggest block",
+    "insert": "Insert into page",
+    "loading": "Generating...",
+    "empty": "AI output will appear here",
+    "error": "AI is currently unavailable"
+  },
+  "graph": {
+    "title": "Link Graph",
+    "subtitle": "All incoming and outgoing links for this page in one place",
+    "incomingShort": "Incoming",
+    "outgoingShort": "Outgoing",
+    "incoming": "Incoming: {{count}}",
+    "outgoing": "Outgoing: {{count}}",
+    "references": "This page links to",
+    "referencedBy": "Pages linking here",
+    "loading": "Loading graph...",
+    "empty": "Graph is unavailable",
+    "none": "No links yet"
+  }
+}

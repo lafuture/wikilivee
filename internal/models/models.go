@@ -28,6 +28,28 @@ type PageSummary struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type SearchResult struct {
+	PageID    string    `json:"pageId"`
+	Title     string    `json:"title"`
+	Snippet   string    `json:"snippet"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type GraphNode struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+type GraphEdge struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+type Graph struct {
+	Nodes []GraphNode `json:"nodes"`
+	Edges []GraphEdge `json:"edges"`
+}
+
 type PageVersionSummary struct {
 	Version int       `json:"version"`
 	SavedAt time.Time `json:"savedAt"`

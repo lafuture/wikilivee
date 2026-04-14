@@ -28,7 +28,22 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "http://217.73.116.173:5173", "http://217.73.116.173:3000", "http://217.73.116.173:8080"},
+		AllowedOrigins: []string{
+			"http://localhost",
+			"http://localhost:*",
+			"https://localhost",
+			"https://localhost:*",
+			"http://127.0.0.1",
+			"http://127.0.0.1:*",
+			"https://127.0.0.1",
+			"https://127.0.0.1:*",
+			"http://217.73.116.173",
+			"http://217.73.116.173:*",
+			"https://217.73.116.173",
+			"https://217.73.116.173:*",
+			"http://balooai.ru",
+			"https://balooai.ru",
+		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization"},
 		AllowCredentials: true,
@@ -44,6 +59,11 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 
 		r.Get("/api/pages", handler.GetPagesHandler)
 		r.Post("/api/pages", handler.CreatePageHandler)
+
+		// Search and graph must be registered BEFORE the {id} patterns
+		r.Post("/api/pages/search", handler.SearchPagesHandler)
+		r.Get("/api/pages/graph", handler.GraphPagesHandler)
+
 		r.Get("/api/pages/{id}", handler.GetPageHandler)
 		r.Put("/api/pages/{id}", handler.SavePageHandler)
 		r.Delete("/api/pages/{id}", handler.DeletePageHandler)
@@ -53,9 +73,6 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 		r.Get("/api/pages/{id}/versions", handler.GetPageVersionsHandler)
 		r.Get("/api/pages/{id}/versions/{version}", handler.GetPageVersionHandler)
 		r.Post("/api/pages/{id}/versions/{version}/restore", handler.RestorePageVersionHandler)
-
-		r.Post("/api/pages/search", handler.SearchPagesHandler)
-		r.Get("/api/pages/graph", handler.GraphPagesHandler)
 
 		r.Get("/api/pages/{id}/comments", handler.GetCommentsHandler)
 		r.Post("/api/pages/{id}/comments", handler.AddCommentHandler)

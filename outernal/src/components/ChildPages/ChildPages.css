@@ -1,0 +1,125 @@
+.child-pages {
+  margin-top: 32px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--bg-secondary), color-mix(in srgb, var(--bg-elevated) 82%, transparent));
+}
+
+.child-pages-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.child-pages-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.child-pages-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.child-pages-add {
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.child-pages-add:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.child-pages-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.child-page-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+
+.child-page-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.child-page-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.child-page-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.child-page-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.child-page-meta,
+.child-pages-empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.child-pages.is-compact {
+  margin-top: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.child-pages.is-compact .child-pages-header {
+  margin-bottom: 10px;
+}
+
+.child-pages.is-compact .child-pages-list {
+  margin-top: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.child-pages.is-compact .child-pages-title,
+.child-pages.is-compact .child-pages-subtitle {
+  display: none;
+}
+
+.child-pages.is-compact .child-page-card {
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 10px 12px;
+}
+
+.child-pages.is-compact .child-page-card:hover {
+  box-shadow: var(--shadow-sm);
+}

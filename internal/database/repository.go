@@ -3,17 +3,19 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
+	"unicode/utf8"
 	"wikilivee/internal/models"
 )
 
 func (p *Postgres) CreatePage(ctx context.Context, id, title, icon, parentId, author string) (models.Page, error) {
 	const q = `
-		INSERT INTO pages (id, title, icon, parent_id, author, content, version, updated_at)
-		VALUES ($1, $2, $3, $4, $5, '[]', 1, NOW())
+		INSERT INTO pages (id, title, icon, parent_id, content, version, updated_at)
+		VALUES ($1, $2, $3, NULLIF($4, ''), '[]', 1, NOW())
 		RETURNING id, title, icon, COALESCE(parent_id, ''), content, version, updated_at`
 
-	return scanPage(p.Pool.QueryRow(ctx, q, id, title, icon, parentId, author))
+	return scanPage(p.Pool.QueryRow(ctx, q, id, title, icon, parentId))
 }
 
 func (p *Postgres) GetPage(ctx context.Context, id string) (models.Page, error) {
@@ -38,6 +40,135 @@ func (p *Postgres) GetPages(ctx context.Context) ([]models.PageSummary, error) {
 		pages = append(pages, s)
 	}
 	return pages, rows.Err()
+}
+
+func (p *Postgres) SearchPages(ctx context.Context, text string) ([]models.SearchResult, error) {
+	query := strings.TrimSpace(text)
+	if query == "" {
+		return []models.SearchResult{}, nil
+	}
+
+	const shortQuerySQL = `
+		WITH searchable AS (
+			SELECT
+				p.id,
+				p.title,
+				p.updated_at,
+				COALESCE((
+					SELECT string_agg(trim(block->>'content'), ' ')
+					FROM jsonb_array_elements(
+						CASE WHEN jsonb_typeof(p.content) = 'array' THEN p.content ELSE '[]'::jsonb END
+					) AS block
+					WHERE block ? 'content'
+					  AND trim(block->>'content') <> ''
+				), '') AS body
+			FROM pages p
+		)
+		SELECT
+			id,
+			title,
+			CASE
+				WHEN position(lower($1) in lower(body)) > 0 THEN substr(body, greatest(position(lower($1) in lower(body)) - 40, 1), 160)
+				WHEN body <> '' THEN left(body, 160)
+				ELSE left(title, 160)
+			END AS snippet,
+			updated_at
+		FROM searchable
+		WHERE lower(title) LIKE lower('%' || $1 || '%')
+		   OR lower(body) LIKE lower('%' || $1 || '%')
+		ORDER BY updated_at DESC
+		LIMIT 20`
+
+	// Trigram matching is ineffective for very short tokens, so we fallback to ILIKE.
+	if utf8.RuneCountInString(query) < 3 {
+		rows, err := p.Pool.Query(ctx, shortQuerySQL, query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		results := make([]models.SearchResult, 0)
+		for rows.Next() {
+			var item models.SearchResult
+			if err := rows.Scan(&item.PageID, &item.Title, &item.Snippet, &item.UpdatedAt); err != nil {
+				return nil, err
+			}
+			results = append(results, item)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return results, nil
+	}
+
+	const trigramQuerySQL = `
+		WITH searchable AS (
+			SELECT
+				p.id,
+				p.title,
+				p.updated_at,
+				COALESCE((
+					SELECT string_agg(trim(block->>'content'), ' ')
+					FROM jsonb_array_elements(
+						CASE WHEN jsonb_typeof(p.content) = 'array' THEN p.content ELSE '[]'::jsonb END
+					) AS block
+					WHERE block ? 'content'
+					  AND trim(block->>'content') <> ''
+				), '') AS body
+			FROM pages p
+		),
+		ranked AS (
+			SELECT
+				id,
+				title,
+				updated_at,
+				body,
+				GREATEST(
+					similarity(title, $1),
+					similarity(body, $1),
+					similarity(title || ' ' || body, $1)
+				) AS score
+			FROM searchable
+			WHERE title % $1
+			   OR body % $1
+			   OR (title || ' ' || body) % $1
+		)
+		SELECT
+			id,
+			title,
+			CASE
+				WHEN position(lower($1) in lower(body)) > 0 THEN substr(body, greatest(position(lower($1) in lower(body)) - 40, 1), 160)
+				WHEN body <> '' THEN left(body, 160)
+				ELSE left(title, 160)
+			END AS snippet,
+			updated_at
+		FROM ranked
+		ORDER BY score DESC, updated_at DESC
+		LIMIT 20`
+
+	rows, err := p.Pool.Query(ctx, trigramQuerySQL, query)
+	if err != nil {
+		// Fallback to ILIKE if trigram search fails (e.g., pg_trgm not installed)
+		rows, err = p.Pool.Query(ctx, shortQuerySQL, query)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defer rows.Close()
+
+	results := make([]models.SearchResult, 0)
+	for rows.Next() {
+		var item models.SearchResult
+		if err := rows.Scan(&item.PageID, &item.Title, &item.Snippet, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		results = append(results, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
 
 func (p *Postgres) SavePage(ctx context.Context, id, title string, content []models.Block, version int) (int, error) {
@@ -74,7 +205,7 @@ func (p *Postgres) DeletePage(ctx context.Context, id string) error {
 
 func (p *Postgres) GetPageBacklinks(ctx context.Context, id string) ([]models.PageSummary, error) {
 	const q = `
-		SELECT id, title, updated_at FROM pages
+		SELECT id, title, icon, COALESCE(parent_id, ''), version, updated_at FROM pages
 		WHERE EXISTS (
 			SELECT 1 FROM jsonb_array_elements(content) AS block
 			WHERE block->>'type' = 'page_link'
@@ -91,12 +222,74 @@ func (p *Postgres) GetPageBacklinks(ctx context.Context, id string) ([]models.Pa
 	var pages []models.PageSummary
 	for rows.Next() {
 		var s models.PageSummary
-		if err := rows.Scan(&s.ID, &s.Title, &s.UpdatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.Icon, &s.ParentID, &s.Version, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
 		pages = append(pages, s)
 	}
 	return pages, rows.Err()
+}
+
+func (p *Postgres) GetPagesGraph(ctx context.Context) (models.Graph, error) {
+	const nodesQ = `
+		SELECT id, title
+		FROM pages
+		ORDER BY updated_at DESC`
+
+	nodeRows, err := p.Pool.Query(ctx, nodesQ)
+	if err != nil {
+		return models.Graph{}, err
+	}
+	defer nodeRows.Close()
+
+	nodes := make([]models.GraphNode, 0)
+	for nodeRows.Next() {
+		var node models.GraphNode
+		if err := nodeRows.Scan(&node.ID, &node.Title); err != nil {
+			return models.Graph{}, err
+		}
+		nodes = append(nodes, node)
+	}
+	if err := nodeRows.Err(); err != nil {
+		return models.Graph{}, err
+	}
+
+	const edgesQ = `
+		SELECT DISTINCT
+			p.id AS source,
+			block->'props'->>'targetId' AS target
+		FROM pages p
+		CROSS JOIN LATERAL jsonb_array_elements(
+			CASE WHEN jsonb_typeof(p.content) = 'array' THEN p.content ELSE '[]'::jsonb END
+		) AS block
+		JOIN pages target_page
+		  ON target_page.id = block->'props'->>'targetId'
+		WHERE block->>'type' = 'page_link'
+		  AND COALESCE(block->'props'->>'targetId', '') <> ''
+		ORDER BY source, target`
+
+	edgeRows, err := p.Pool.Query(ctx, edgesQ)
+	if err != nil {
+		return models.Graph{}, err
+	}
+	defer edgeRows.Close()
+
+	edges := make([]models.GraphEdge, 0)
+	for edgeRows.Next() {
+		var edge models.GraphEdge
+		if err := edgeRows.Scan(&edge.Source, &edge.Target); err != nil {
+			return models.Graph{}, err
+		}
+		edges = append(edges, edge)
+	}
+	if err := edgeRows.Err(); err != nil {
+		return models.Graph{}, err
+	}
+
+	return models.Graph{
+		Nodes: nodes,
+		Edges: edges,
+	}, nil
 }
 
 type rower interface {

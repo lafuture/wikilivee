@@ -28,6 +28,10 @@ type SavePageResponse struct {
 	Version int    `json:"version"`
 }
 
+type SearchRequest struct {
+	Text string `json:"text"`
+}
+
 func newID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
@@ -207,11 +211,32 @@ func (h *Handler) RestorePageVersionHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *Handler) SearchPagesHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, []any{})
+	var req SearchRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	results, err := h.db.SearchPages(r.Context(), req.Text)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+
+	if results == nil {
+		results = []models.SearchResult{}
+	}
+	writeJSON(w, http.StatusOK, results)
 }
 
 func (h *Handler) GraphPagesHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"nodes": []any{}, "edges": []any{}})
+	graph, err := h.db.GetPagesGraph(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, graph)
 }
 
 type AddCommentRequest struct {
