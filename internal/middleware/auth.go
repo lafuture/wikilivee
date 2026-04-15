@@ -17,11 +17,17 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
-			if !strings.HasPrefix(header, "Bearer ") {
+			tokenStr := ""
+			if strings.HasPrefix(header, "Bearer ") {
+				tokenStr = strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+			}
+			if tokenStr == "" {
+				tokenStr = strings.TrimSpace(r.URL.Query().Get("token"))
+			}
+			if tokenStr == "" {
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
-			tokenStr := strings.TrimPrefix(header, "Bearer ")
 
 			token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {

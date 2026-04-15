@@ -16,7 +16,27 @@
       "Bash(curl -s -X POST http://localhost:8080/api/auth/register -H \"Content-Type: application/json\" -d '{\"username\":\"testuser\",\"password\":\"testpass\"}')",
       "Bash(curl -s -X POST http://localhost:8080/api/pages -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzg3OTcyMDAsInVzZXJJZCI6IjdhNTEwN2ZkLTJlODctNGRhZS1hZDBiLWQ3MzdhYWU5MDQ4MCIsInVzZXJuYW1lIjoidGVzdHVzZXIifQ.E7ZykyLRj3Qk-HcrA5Y-OJxGRW0SYl85C8rkb7xT0q0' -d '{\"title\":\"Test\",\"icon\":\"\",\"parentId\":\"\"}')",
       "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "Bash(docker build:*)",
+      "Bash(grep -n \"func.*\\\\\\(.*Table\" /Users/zakharbakhmutov/Desktop/WikiLivee/internal/database/*.go)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker-compose exec:*)",
+      "Bash(curl -s \"https://tables.mws.ru/api/v1/public/shared-view/shrYqJpkbKTqoKWy53AR9/rows\")",
+      "Bash(python3 -m json.tool)",
+      "WebFetch(domain:tables.mws.ru)",
+      "Bash(curl -s https://tables.mws.ru/fusion/v1/spaces -H 'Authorization: Bearer usklKmBsRYNUFSHteGMXLIW')",
+      "Bash(curl -s -X POST https://tables.mws.ru/fusion/v1/spaces/spc7oPBX4vmYs/datasheets -H 'Authorization: Bearer usklKmBsRYNUFSHteGMXLIW' -H 'Content-Type: application/json' -d '{\"name\":\"Test create\",\"fields\":[{\"name\":\"Name\",\"type\":\"SingleText\"}]}')",
+      "Bash(curl -s -X POST https://tables.mws.ru/fusion/v1/spaces/spc7oPBX4vmYs/datasheets -H 'Authorization: Bearer usklKmBsRYNUFSHteGMXLIW' -H 'Content-Type: application/json' -d '{\"name\":\"TestTable2\"}')",
+      "Bash(curl -s -X POST https://tables.mws.ru/fusion/v1/datasheets/dst8TJfKAx9BfB0hyo/records -H 'Authorization: Bearer usklKmBsRYNUFSHteGMXLIW' -H 'Content-Type: application/json' -d '{\"records\":[{\"fields\":{\"fldz9tix9W4dV\":\"test\"}}]}')",
+      "Bash(curl -s -X POST 'https://tables.mws.ru/fusion/v1/datasheets/dst8TJfKAx9BfB0hyo/records?fieldKey=name' -H 'Authorization: Bearer usklKmBsRYNUFSHteGMXLIW' -H 'Content-Type: application/json' -d '{\"records\":[{\"fields\":{\"Название\":\"test row\"}}]}')",
+      "Bash(brew list:*)",
+      "Bash(java -jar /usr/local/bin/plantuml.jar -version)",
+      "Bash(brew install:*)",
+      "Bash(plantuml -version)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//usr/local/bin/**)",
+      "Read(//Users/zakharbakhmutov/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/efc4675b-b37b-4e1e-8bdb-47ffaf9c29f3/aed17ce6-eb3b-4147-a245-a86c90a5638b/skills/xlsx/**)",
+      "Bash(python3 -c ':*)"
     ]
   }
 }

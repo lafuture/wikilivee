@@ -1,9 +1,9 @@
 package ws
 
 import (
-	"fmt"
 	"math/rand"
 	"net/http"
+	"wikilivee/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
@@ -38,6 +38,21 @@ func NewHandler(hub *Hub) http.HandlerFunc {
 			http.Error(w, "missing page id", http.StatusBadRequest)
 			return
 		}
+		userID, _ := r.Context().Value(middleware.UserIDKey).(string)
+		username, _ := r.Context().Value(middleware.UsernameKey).(string)
+		if userID == "" || username == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		canEdit, err := hub.CanUserEditPage(r.Context(), pageID, userID, username)
+		if err != nil {
+			http.Error(w, "database error", http.StatusInternalServerError)
+			return
+		}
+		if !canEdit {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 
 		r.Proto = "HTTP/1.1"
 		r.ProtoMajor = 1
@@ -48,16 +63,7 @@ func NewHandler(hub *Hub) http.HandlerFunc {
 			return
 		}
 
-		userID := r.URL.Query().Get("userId")
-		name := r.URL.Query().Get("name")
 		color := r.URL.Query().Get("color")
-
-		if userID == "" {
-			userID = fmt.Sprintf("anon-%d", rand.Intn(99999))
-		}
-		if name == "" {
-			name = "Anonymous"
-		}
 		if color == "" {
 			color = randomColor()
 		}
@@ -72,7 +78,7 @@ func NewHandler(hub *Hub) http.HandlerFunc {
 
 		hub.Join(pageID, client, PresenceUser{
 			UserID: userID,
-			Name:   name,
+			Name:   username,
 			Color:  color,
 		})
 

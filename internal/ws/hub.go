@@ -10,6 +10,7 @@ import (
 
 type PageRepo interface {
 	SavePage(ctx context.Context, id, title string, content []models.Block, version int) (int, error)
+	CanUserEditPage(ctx context.Context, pageID, userID, username string) (bool, error)
 }
 
 type Message struct {
@@ -87,6 +88,10 @@ func (h *Hub) Handle(ctx context.Context, pageID string, sender *Client, raw []b
 	case "cursor":
 		h.broadcast(pageID, sender, raw)
 	}
+}
+
+func (h *Hub) CanUserEditPage(ctx context.Context, pageID, userID, username string) (bool, error) {
+	return h.db.CanUserEditPage(ctx, pageID, userID, username)
 }
 
 func (h *Hub) broadcast(pageID string, sender *Client, msg []byte) {

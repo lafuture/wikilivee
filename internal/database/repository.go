@@ -3,28 +3,32 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 	"unicode/utf8"
 	"wikilivee/internal/models"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func (p *Postgres) CreatePage(ctx context.Context, id, title, icon, parentId, author string) (models.Page, error) {
 	const q = `
-		INSERT INTO pages (id, title, icon, parent_id, content, version, updated_at)
-		VALUES ($1, $2, $3, NULLIF($4, ''), '[]', 1, NOW())
-		RETURNING id, title, icon, COALESCE(parent_id, ''), content, version, updated_at`
+		INSERT INTO pages (id, title, icon, author, parent_id, content, version, updated_at)
+		VALUES ($1, $2, $3, $4, NULLIF($5, ''), '[]', 1, NOW())
+		RETURNING id, title, icon, author, COALESCE(parent_id, ''), content, version, updated_at`
 
-	return scanPage(p.Pool.QueryRow(ctx, q, id, title, icon, parentId))
+	return scanPage(p.Pool.QueryRow(ctx, q, id, title, icon, author, parentId))
 }
 
 func (p *Postgres) GetPage(ctx context.Context, id string) (models.Page, error) {
-	const q = `SELECT id, title, icon, COALESCE(parent_id, ''), content, version, updated_at FROM pages WHERE id = $1`
+	const q = `SELECT id, title, icon, author, COALESCE(parent_id, ''), content, version, updated_at FROM pages WHERE id = $1`
 	return scanPage(p.Pool.QueryRow(ctx, q, id))
 }
 
 func (p *Postgres) GetPages(ctx context.Context) ([]models.PageSummary, error) {
-	const q = `SELECT id, title, icon, COALESCE(parent_id, ''), version, updated_at FROM pages ORDER BY updated_at DESC`
+	const q = `SELECT id, title, icon, author, COALESCE(parent_id, ''), version, updated_at FROM pages ORDER BY updated_at DESC`
 	rows, err := p.Pool.Query(ctx, q)
 	if err != nil {
 		return nil, err
@@ -34,12 +38,67 @@ func (p *Postgres) GetPages(ctx context.Context) ([]models.PageSummary, error) {
 	var pages []models.PageSummary
 	for rows.Next() {
 		var s models.PageSummary
-		if err := rows.Scan(&s.ID, &s.Title, &s.Icon, &s.ParentID, &s.Version, &s.UpdatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.Icon, &s.Author, &s.ParentID, &s.Version, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
 		pages = append(pages, s)
 	}
 	return pages, rows.Err()
+}
+
+func (p *Postgres) GetPagesForUser(ctx context.Context, userID, username string) ([]models.PageSummary, error) {
+	const q = `
+		SELECT DISTINCT p.id, p.title, p.icon, p.author, COALESCE(p.parent_id, ''), p.version, p.updated_at
+		FROM pages p
+		LEFT JOIN page_permissions pp
+		  ON pp.page_id = p.id
+		 AND pp.user_id = $1::uuid
+		 AND pp.role = 'editor'
+		WHERE p.author = $2
+		   OR pp.user_id IS NOT NULL
+		ORDER BY p.updated_at DESC`
+	rows, err := p.Pool.Query(ctx, q, userID, username)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+			return p.getPagesByAuthor(ctx, username)
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]models.PageSummary, 0)
+	for rows.Next() {
+		var s models.PageSummary
+		if err := rows.Scan(&s.ID, &s.Title, &s.Icon, &s.Author, &s.ParentID, &s.Version, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, s)
+	}
+	return items, rows.Err()
+}
+
+func (p *Postgres) getPagesByAuthor(ctx context.Context, username string) ([]models.PageSummary, error) {
+	const q = `
+		SELECT id, title, icon, author, COALESCE(parent_id, ''), version, updated_at
+		FROM pages
+		WHERE author = $1
+		ORDER BY updated_at DESC`
+	rows, err := p.Pool.Query(ctx, q, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]models.PageSummary, 0)
+	for rows.Next() {
+		var s models.PageSummary
+		if err := rows.Scan(&s.ID, &s.Title, &s.Icon, &s.Author, &s.ParentID, &s.Version, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, s)
+	}
+	return items, rows.Err()
 }
 
 func (p *Postgres) SearchPages(ctx context.Context, text string) ([]models.SearchResult, error) {
@@ -79,7 +138,6 @@ func (p *Postgres) SearchPages(ctx context.Context, text string) ([]models.Searc
 		ORDER BY updated_at DESC
 		LIMIT 20`
 
-	// Trigram matching is ineffective for very short tokens, so we fallback to ILIKE.
 	if utf8.RuneCountInString(query) < 3 {
 		rows, err := p.Pool.Query(ctx, shortQuerySQL, query)
 		if err != nil {
@@ -132,6 +190,8 @@ func (p *Postgres) SearchPages(ctx context.Context, text string) ([]models.Searc
 			WHERE title % $1
 			   OR body % $1
 			   OR (title || ' ' || body) % $1
+			   OR lower(title) LIKE lower('%' || $1 || '%')
+			   OR lower(body) LIKE lower('%' || $1 || '%')
 		)
 		SELECT
 			id,
@@ -148,7 +208,6 @@ func (p *Postgres) SearchPages(ctx context.Context, text string) ([]models.Searc
 
 	rows, err := p.Pool.Query(ctx, trigramQuerySQL, query)
 	if err != nil {
-		// Fallback to ILIKE if trigram search fails (e.g., pg_trgm not installed)
 		rows, err = p.Pool.Query(ctx, shortQuerySQL, query)
 		if err != nil {
 			return nil, err
@@ -231,65 +290,144 @@ func (p *Postgres) GetPageBacklinks(ctx context.Context, id string) ([]models.Pa
 }
 
 func (p *Postgres) GetPagesGraph(ctx context.Context) (models.Graph, error) {
+
+	nodes := make([]models.GraphNode, 0)
+	edges := make([]models.GraphEdge, 0)
+
 	const nodesQ = `
-		SELECT id, title
+		SELECT id, COALESCE(NULLIF(title, ''), 'Untitled') AS title
 		FROM pages
 		ORDER BY updated_at DESC`
 
 	nodeRows, err := p.Pool.Query(ctx, nodesQ)
 	if err != nil {
-		return models.Graph{}, err
+		return models.Graph{Nodes: nodes, Edges: edges}, err
 	}
 	defer nodeRows.Close()
 
-	nodes := make([]models.GraphNode, 0)
+	validIDs := make(map[string]struct{})
 	for nodeRows.Next() {
 		var node models.GraphNode
 		if err := nodeRows.Scan(&node.ID, &node.Title); err != nil {
-			return models.Graph{}, err
+			return models.Graph{Nodes: nodes, Edges: edges}, err
 		}
 		nodes = append(nodes, node)
+		validIDs[node.ID] = struct{}{}
 	}
 	if err := nodeRows.Err(); err != nil {
-		return models.Graph{}, err
+		return models.Graph{Nodes: nodes, Edges: edges}, err
+	}
+
+	if len(nodes) == 0 {
+		return models.Graph{Nodes: nodes, Edges: edges}, nil
+	}
+
+	const hierarchyQ = `
+		SELECT id, parent_id
+		FROM pages
+		WHERE parent_id IS NOT NULL
+		  AND parent_id <> ''`
+
+	hierarchyRows, err := p.Pool.Query(ctx, hierarchyQ)
+	if err == nil {
+		defer hierarchyRows.Close()
+		seen := make(map[string]struct{})
+		for hierarchyRows.Next() {
+			var child string
+			var parent *string
+			if err := hierarchyRows.Scan(&child, &parent); err != nil {
+				continue
+			}
+			if parent == nil || *parent == "" || child == "" {
+				continue
+			}
+			if _, ok := validIDs[*parent]; !ok {
+				continue
+			}
+			if _, ok := validIDs[child]; !ok {
+				continue
+			}
+			key := child + "->" + *parent
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			edges = append(edges, models.GraphEdge{
+				Source: child,
+				Target: *parent,
+			})
+		}
 	}
 
 	const edgesQ = `
-		SELECT DISTINCT
-			p.id AS source,
-			block->'props'->>'targetId' AS target
-		FROM pages p
-		CROSS JOIN LATERAL jsonb_array_elements(
-			CASE WHEN jsonb_typeof(p.content) = 'array' THEN p.content ELSE '[]'::jsonb END
-		) AS block
-		JOIN pages target_page
-		  ON target_page.id = block->'props'->>'targetId'
-		WHERE block->>'type' = 'page_link'
-		  AND COALESCE(block->'props'->>'targetId', '') <> ''
-		ORDER BY source, target`
+		WITH block_refs AS (
+			SELECT
+				p.id AS source,
+				block
+			FROM pages p
+			CROSS JOIN LATERAL jsonb_array_elements(
+				CASE WHEN jsonb_typeof(p.content) = 'array' THEN p.content ELSE '[]'::jsonb END
+			) AS block
+		),
+		targets AS (
+			SELECT
+				source,
+				NULLIF(
+					COALESCE(block->'props'->>'targetId', block->'props'->>'pageId'),
+					''
+				) AS target
+			FROM block_refs
+			WHERE block->>'type' = 'page_link'
+
+			UNION ALL
+
+			SELECT
+				source,
+				NULLIF(link #>> '{}', '') AS target
+			FROM block_refs
+			CROSS JOIN LATERAL jsonb_path_query(
+				block,
+				'$.props.tiptapContent.** ? (@.type == "wikiLink").attrs.pageId'
+			) AS link
+		)
+		SELECT source, target
+		FROM targets
+		WHERE target IS NOT NULL`
 
 	edgeRows, err := p.Pool.Query(ctx, edgesQ)
 	if err != nil {
-		return models.Graph{}, err
+		return models.Graph{Nodes: nodes, Edges: edges}, nil
 	}
 	defer edgeRows.Close()
 
-	edges := make([]models.GraphEdge, 0)
-	for edgeRows.Next() {
-		var edge models.GraphEdge
-		if err := edgeRows.Scan(&edge.Source, &edge.Target); err != nil {
-			return models.Graph{}, err
-		}
-		edges = append(edges, edge)
+	seen := make(map[string]struct{}, len(edges))
+	for _, edge := range edges {
+		seen[edge.Source+"->"+edge.Target] = struct{}{}
 	}
-	if err := edgeRows.Err(); err != nil {
-		return models.Graph{}, err
+	for edgeRows.Next() {
+		var source string
+		var target *string
+		if err := edgeRows.Scan(&source, &target); err != nil {
+			continue
+		}
+		if target == nil || *target == "" || source == "" {
+			continue
+		}
+		if _, ok := validIDs[*target]; !ok {
+			continue
+		}
+		key := source + "->" + *target
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		edges = append(edges, models.GraphEdge{
+			Source: source,
+			Target: *target,
+		})
 	}
 
-	return models.Graph{
-		Nodes: nodes,
-		Edges: edges,
-	}, nil
+	return models.Graph{Nodes: nodes, Edges: edges}, nil
 }
 
 type rower interface {
@@ -301,7 +439,7 @@ func scanPage(row rower) (models.Page, error) {
 	var contentRaw []byte
 	var updatedAt time.Time
 
-	if err := row.Scan(&p.ID, &p.Title, &p.Icon, &p.ParentID, &contentRaw, &p.Version, &updatedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.Title, &p.Icon, &p.Author, &p.ParentID, &contentRaw, &p.Version, &updatedAt); err != nil {
 		return models.Page{}, err
 	}
 	p.UpdatedAt = updatedAt
@@ -407,8 +545,6 @@ func (p *Postgres) RestorePage(ctx context.Context, id string, version string) (
 	return newVersion, nil
 }
 
-// ---- User repository methods ----
-
 func (p *Postgres) CreateUser(ctx context.Context, username, passwordHash string) (models.User, error) {
 	const q = `
 		INSERT INTO users (username, password_hash)
@@ -429,7 +565,130 @@ func (p *Postgres) GetUserByUsername(ctx context.Context, username string) (mode
 	return u, err
 }
 
-// ---- Comment repository methods ----
+func (p *Postgres) SearchUsers(ctx context.Context, query string, limit int) ([]models.UserSummary, error) {
+	normalized := strings.TrimSpace(query)
+	if normalized == "" {
+		return []models.UserSummary{}, nil
+	}
+	if limit <= 0 || limit > 20 {
+		limit = 10
+	}
+
+	const q = `
+		SELECT id::text, username
+		FROM users
+		WHERE username ILIKE '%' || $1 || '%'
+		ORDER BY username
+		LIMIT $2`
+
+	rows, err := p.Pool.Query(ctx, q, normalized, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]models.UserSummary, 0)
+	for rows.Next() {
+		var item models.UserSummary
+		if err := rows.Scan(&item.ID, &item.Username); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if items == nil {
+		items = []models.UserSummary{}
+	}
+	return items, rows.Err()
+}
+
+func (p *Postgres) IsPageOwner(ctx context.Context, pageID, username string) (bool, error) {
+	const q = `SELECT 1 FROM pages WHERE id = $1 AND author = $2`
+	var marker int
+	if err := p.Pool.QueryRow(ctx, q, pageID, username).Scan(&marker); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return marker == 1, nil
+}
+
+func (p *Postgres) CanUserEditPage(ctx context.Context, pageID, userID, username string) (bool, error) {
+	owner, err := p.IsPageOwner(ctx, pageID, username)
+	if err != nil {
+		return false, err
+	}
+	if owner {
+		return true, nil
+	}
+
+	const q = `
+		SELECT 1
+		FROM page_permissions
+		WHERE page_id = $1
+		  AND user_id = $2::uuid
+		  AND role = 'editor'`
+	var marker int
+	if err := p.Pool.QueryRow(ctx, q, pageID, userID).Scan(&marker); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+			return false, nil
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return marker == 1, nil
+}
+
+func (p *Postgres) GetPageAccessEntries(ctx context.Context, pageID string) ([]models.PageAccessEntry, error) {
+	const q = `
+		SELECT u.id::text, u.username, pp.role
+		FROM page_permissions pp
+		JOIN users u ON u.id = pp.user_id
+		WHERE pp.page_id = $1
+		ORDER BY pp.created_at ASC`
+
+	rows, err := p.Pool.Query(ctx, q, pageID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+			return []models.PageAccessEntry{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]models.PageAccessEntry, 0)
+	for rows.Next() {
+		var item models.PageAccessEntry
+		if err := rows.Scan(&item.UserID, &item.Username, &item.Role); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if items == nil {
+		items = []models.PageAccessEntry{}
+	}
+	return items, rows.Err()
+}
+
+func (p *Postgres) UpsertPagePermission(ctx context.Context, pageID, userID, role string) error {
+	const q = `
+		INSERT INTO page_permissions (page_id, user_id, role)
+		VALUES ($1, $2::uuid, $3)
+		ON CONFLICT (page_id, user_id)
+		DO UPDATE SET role = EXCLUDED.role`
+	_, err := p.Pool.Exec(ctx, q, pageID, userID, role)
+	return err
+}
+
+func (p *Postgres) DeletePagePermission(ctx context.Context, pageID, userID string) error {
+	const q = `DELETE FROM page_permissions WHERE page_id = $1 AND user_id = $2::uuid`
+	_, err := p.Pool.Exec(ctx, q, pageID, userID)
+	return err
+}
 
 func (p *Postgres) GetComments(ctx context.Context, pageID string) ([]models.Comment, error) {
 	const q = `
@@ -470,13 +729,17 @@ func (p *Postgres) CreateComment(ctx context.Context, pageID, author, text strin
 	return c, err
 }
 
-func (p *Postgres) DeleteComment(ctx context.Context, pageID, commentID string) error {
-	const q = `DELETE FROM comments WHERE id = $1::uuid AND page_id = $2`
-	_, err := p.Pool.Exec(ctx, q, commentID, pageID)
-	return err
+func (p *Postgres) DeleteComment(ctx context.Context, pageID, commentID, author string) error {
+	const q = `DELETE FROM comments WHERE id = $1::uuid AND page_id = $2 AND author = $3`
+	result, err := p.Pool.Exec(ctx, q, commentID, pageID, author)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
-
-// ---- Table repository methods ----
 
 func (p *Postgres) GetTables(ctx context.Context) ([]models.TableSummary, error) {
 	const q = `

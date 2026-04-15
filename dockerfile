@@ -1,4 +1,3 @@
-# Оба stage на golang:1.25-alpine — не тянем отдельно library/alpine (меньше запросов к Docker Hub при сборке).
 FROM golang:1.25-alpine AS build
 
 WORKDIR /src

@@ -20,6 +20,9 @@ services:
       JWT_SECRET: "${JWT_SECRET:-super-secret-key-change-me}"
       DB_URL: "${DB_URL:-postgresql://user:qwerty@db:5432/mydb?sslmode=disable}"
       MIGRA_URL: "${MIGRA_URL:-file:///app/internal/database/migrations}"
+      MWS_TABLES_URL: "${MWS_TABLES_URL:-https://tables.mws.ru/api/v1}"
+      MWS_TABLES_API_KEY: "${MWS_TABLES_API_KEY}"
+      MWS_GPT_API_KEY: "${MWS_GPT_API_KEY}"
 
   db:
     image: postgres:16.10-alpine

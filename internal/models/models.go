@@ -13,6 +13,7 @@ type Page struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
 	Icon      string    `json:"icon"`
+	Author    string    `json:"author"`
 	ParentID  string    `json:"parent_id"`
 	Content   []Block   `json:"content"`
 	Version   int       `json:"version"`
@@ -23,6 +24,7 @@ type PageSummary struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
 	Icon      string    `json:"icon"`
+	Author    string    `json:"author"`
 	ParentID  string    `json:"parent_id"`
 	Version   int       `json:"version"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -104,6 +106,17 @@ type User struct {
 	Username     string    `json:"username"`
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"createdAt"`
+}
+
+type UserSummary struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+}
+
+type PageAccessEntry struct {
+	UserID   string `json:"userId"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
 }
 
 type Comment struct {

@@ -1,0 +1,10 @@
+{
+  "name": "wikilivee",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix outernal",
+    "dev": "npm run dev --prefix outernal",
+    "lint": "npm run lint --prefix outernal",
+    "preview": "npm run preview --prefix outernal"
+  }
+}

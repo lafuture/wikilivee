@@ -56,11 +56,12 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 		r.Use(apimw.Auth(jwtSecret))
 
 		r.Get("/api/auth/me", handler.MeHandler)
+		r.Get("/api/users/search", handler.SearchUsersHandler)
 
 		r.Get("/api/pages", handler.GetPagesHandler)
+		r.Get("/api/pages/mine", handler.GetMyPagesHandler)
 		r.Post("/api/pages", handler.CreatePageHandler)
 
-		// Search and graph must be registered BEFORE the {id} patterns
 		r.Post("/api/pages/search", handler.SearchPagesHandler)
 		r.Get("/api/pages/graph", handler.GraphPagesHandler)
 
@@ -77,6 +78,13 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 		r.Get("/api/pages/{id}/comments", handler.GetCommentsHandler)
 		r.Post("/api/pages/{id}/comments", handler.AddCommentHandler)
 		r.Delete("/api/pages/{id}/comments", handler.DeleteCommentHandler)
+		r.Get("/api/pages/{id}/access", handler.GetPageAccessHandler)
+		r.Put("/api/pages/{id}/access/{userId}", handler.UpsertPageAccessHandler)
+		r.Delete("/api/pages/{id}/access/{userId}", handler.DeletePageAccessHandler)
+
+		r.Post("/api/pages/{id}/ai/complete", handler.CompleteTextHandler)
+		r.Post("/api/pages/{id}/ai/summarize", handler.SummarizePageHandler)
+		r.Post("/api/pages/{id}/ai/blocks", handler.SuggestBlocksHandler)
 
 		r.Get("/api/tables", handler.GetTablesHandler)
 		r.Post("/api/tables", handler.CreateTableHandler)
@@ -88,9 +96,8 @@ func NewRouter(handler *handlers.Handler, hub *ws.Hub, jwtSecret string) http.Ha
 		r.Post("/api/tables/{id}/rows", handler.AddRowHandler)
 		r.Put("/api/tables/{id}/rows/{rowId}", handler.UpdateRowHandler)
 		r.Delete("/api/tables/{id}/rows/{rowId}", handler.DeleteRowHandler)
+		r.Get("/ws/pages/{id}", ws.NewHandler(hub))
 	})
-
-	r.Get("/ws/pages/{id}", ws.NewHandler(hub))
 
 	root := staticRoot()
 	fs := http.FileServer(http.Dir(root))
